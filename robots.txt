@@ -1,4 +1,4 @@
 Sitemap: https://www.worldofsoumyajit.com/sitemap.xml
 
 User-agent: *
-Allow: /
+Disallow:
