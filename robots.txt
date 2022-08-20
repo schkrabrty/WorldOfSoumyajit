@@ -1,0 +1,4 @@
+Sitemap: https://www.worldofsoumyajit.com/
+
+User-agent: *
+Allow: /
