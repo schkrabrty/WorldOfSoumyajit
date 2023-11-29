@@ -63,11 +63,26 @@
 							<p align="center">
 								<b><i>My current curriculam vitae can be found below.</i></b>
 								</p>
-							<p align="center">
+							<style>
+								/* Style for the iframe container */
+								#pdf-container {
+									width: 100%;
+									max-width: 800px; /* Adjust the maximum width as needed */
+									margin: 0 auto;
+								}
+								
+								/* Style for the iframe itself */
+								#pdf-iframe {
+									width: 100%;
+									height: 500px; /* Set an appropriate height */
+									border: 1px solid #ccc; /* Add a border if desired */
+								}
+								</style>
+							<div id="pdf-container" align="center">
 								<!-- <embed src="https://drive.google.com/uc?export=view&id=1-PDsTbCd_2XZBxAf_f0QGbFMyJ5_Ik1G#toolbar=0&navpanes=0&scrollbar=0" type="application/pdf" width="100%" height="1100vh"  loading="lazy" alt="The CV of Soumyajit Chakraborty has been shown here" decoding="async" /> -->
-								<iframe src="https://drive.google.com/uc?export=view&id=1-PDsTbCd_2XZBxAf_f0QGbFMyJ5_Ik1G#toolbar=0&navpanes=0&scrollbar=0" type="application/pdf" style="width: 100%;height: 350vh;border: none;" alt="The CV of Soumyajit Chakraborty has been shown here" loading="lazy" decoding="async" ></iframe>
+								<iframe id="pdf-iframe" src="https://drive.google.com/uc?export=view&id=1-PDsTbCd_2XZBxAf_f0QGbFMyJ5_Ik1G#toolbar=0&navpanes=0&scrollbar=0" type="application/pdf" alt="The CV of Soumyajit Chakraborty has been shown here" loading="lazy" decoding="async" ></iframe>
 								<!-- #toolbar=0&navpanes=0&scrollbar=0    // This line could be added inside the inverted commas immediately after the src link to remove the toolbars and nav panels of the pdf -->
-							</p>
+							</div>
 							</div>
 					</div>
 
