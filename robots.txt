@@ -1,4 +1,4 @@
 User-agent: *
 Disallow:
 
-Sitemap: https://www.worldofsoumyajit.com/sitemap.xml
+Sitemap: https://worldofsoumyajit.com/sitemap.xml
