@@ -30,4 +30,4 @@ Credits:
 		Responsive Tools (github.com/ajlkn/responsive-tools)
 		
 
-My website address: https://www.worldofsoumyajit.com/
+My website address: https://worldofsoumyajit.com
