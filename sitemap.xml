@@ -162,6 +162,10 @@
 <url>
   <loc>https://worldofsoumyajit.com/Tennessee_River_Trip.html</loc>
   <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://worldofsoumyajit.com/Disney_World_Trip.html</loc>
+  <priority>0.80</priority>
 </url> -->
 
 
@@ -320,6 +324,10 @@
 </url>
 <url>
   <loc>Tennessee_River_Trip.html</loc>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>Disney_World_Trip.html</loc>
   <priority>0.80</priority>
 </url>
 
