@@ -26,6 +26,10 @@
     transform: scale(1.1);
 }
 
+.gallery.certificates {
+    text-align: center;
+}
+
 .tab {
     display: inline-block;
     margin-left: 40px;
