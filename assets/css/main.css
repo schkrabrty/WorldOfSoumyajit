@@ -2561,6 +2561,49 @@ input, select, textarea {
 			opacity: 0.25;
 		}
 
+/* Portfolio sections */
+
+	.portfolio-nav ul {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.75em 1.5em;
+		list-style: none;
+		padding: 0;
+		margin: 0 0 3em;
+	}
+
+		.portfolio-nav li {
+			padding: 0;
+		}
+
+		.portfolio-nav a {
+			display: inline-block;
+			font-weight: 700;
+		}
+
+		.portfolio-nav a:focus-visible {
+			outline: 3px solid #f2849e;
+			outline-offset: 4px;
+		}
+
+	.portfolio-section {
+		scroll-margin-top: 2em;
+	}
+
+		.portfolio-section + .portfolio-section {
+			margin-top: 4em;
+		}
+
+		.portfolio-section > h2 {
+			font-size: 1.35em;
+			letter-spacing: 0.15em;
+			margin: 0;
+		}
+
+		.portfolio-section > .tiles {
+			margin-top: 0;
+		}
+
 /* Tiles */
 
 	.tiles {
@@ -2701,7 +2744,8 @@ input, select, textarea {
 					color: #ffffff !important;
 				}
 
-				.tiles article > a h2 {
+				.tiles article > a h2,
+				.tiles article > a h3 {
 					margin: 0;
 					text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
 				}
@@ -2822,7 +2866,8 @@ input, select, textarea {
 			background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.78) 25%, rgba(0, 0, 0, 0.78) 75%, transparent);
 		}
 
-		.portfolio-tiles article > a h2 {
+		.portfolio-tiles article > a h2,
+		.portfolio-tiles article > a h3 {
 			max-width: var(--tile-caption-width, 100%);
 			font-size: 1em;
 			line-height: 1.35;
@@ -2842,6 +2887,7 @@ input, select, textarea {
 		}
 
 		.portfolio-tiles .caption-right h2,
+		.portfolio-tiles .caption-right h3,
 		.portfolio-tiles .caption-right .content {
 			margin-left: auto;
 		}
