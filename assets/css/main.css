@@ -2604,6 +2604,20 @@ input, select, textarea {
 					width: 100%;
 					height: 100%;
 					object-fit: cover;
+					object-position: var(--tile-image-position, center);
+					/* Crop padding baked into individual tile images. */
+					transform: scale(var(--tile-image-scale, 1));
+					transform-origin: var(--tile-image-origin, center);
+				}
+
+				.tiles article > .image .tile-scene-detail {
+					position: absolute;
+					top: 0;
+					right: 0;
+					width: var(--tile-scene-width, 46%);
+					height: 100%;
+					overflow: hidden;
+					pointer-events: none;
 				}
 
 				.tiles article > .image:before {
@@ -2692,6 +2706,29 @@ input, select, textarea {
 					text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
 				}
 
+				.tiles article > a .tile-award,
+				.tiles article > a .tile-brand {
+					position: absolute;
+					bottom: 0.75em;
+					height: auto;
+					border-radius: 4px;
+					overflow: hidden;
+					background: #ffffff;
+					pointer-events: none;
+				}
+
+				.tiles article > a .tile-award {
+					left: 0.75em;
+					width: 2.5em;
+				}
+
+				.tiles article > a .tile-brand {
+					right: 0.75em;
+					width: 6.5em;
+					max-width: 40%;
+					padding: 0.25em;
+				}
+
 				.tiles article > a .content {
 					-moz-transition: max-height 0.5s ease, opacity 0.5s ease;
 					-webkit-transition: max-height 0.5s ease, opacity 0.5s ease;
@@ -2743,6 +2780,118 @@ input, select, textarea {
 		body.is-touch .tiles article .content {
 			max-height: 15em;
 			opacity: 1;
+		}
+
+		/* Place portfolio titles in the quiet parts of each image. */
+		.portfolio-tiles article > a {
+			padding: 1.15em;
+			text-align: left;
+			overflow: hidden;
+		}
+
+		.portfolio-tiles article.caption-top > a {
+			justify-content: flex-start;
+		}
+
+		.portfolio-tiles article.caption-bottom > a {
+			justify-content: flex-end;
+		}
+
+		.portfolio-tiles article > a .tile-caption {
+			position: relative;
+			isolation: isolate;
+			width: 100%;
+		}
+
+		.portfolio-tiles .tile-caption:before {
+			content: '';
+			position: absolute;
+			inset: -1.15em -1.15em -2.5em;
+			z-index: -1;
+			pointer-events: none;
+			background: linear-gradient(to bottom, rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0.72) 60%, transparent);
+		}
+
+		.portfolio-tiles .caption-bottom .tile-caption:before {
+			inset: -2.5em -1.15em -1.15em;
+			background: linear-gradient(to top, rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0.72) 60%, transparent);
+		}
+
+		.portfolio-tiles .caption-center .tile-caption:before {
+			inset: -1.5em -1.15em;
+			background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.78) 25%, rgba(0, 0, 0, 0.78) 75%, transparent);
+		}
+
+		.portfolio-tiles article > a h2 {
+			max-width: var(--tile-caption-width, 100%);
+			font-size: 1em;
+			line-height: 1.35;
+			letter-spacing: 0.1em;
+			text-wrap: balance;
+		}
+
+		.portfolio-tiles article > a .content {
+			max-width: var(--tile-caption-width, 100%);
+			font-size: 0.8em;
+			line-height: 1.4;
+			overflow: hidden;
+		}
+
+		.portfolio-tiles .caption-right .tile-caption {
+			text-align: right;
+		}
+
+		.portfolio-tiles .caption-right h2,
+		.portfolio-tiles .caption-right .content {
+			margin-left: auto;
+		}
+
+		.portfolio-tiles article > a .tile-award,
+		.portfolio-tiles article > a .tile-brand {
+			z-index: 2;
+		}
+
+		.portfolio-tiles article > .image:before {
+			background-color: rgba(0, 0, 0, 0.22);
+		}
+
+		body:not(.is-touch) .portfolio-tiles article:hover > .image:before {
+			background-color: rgba(0, 0, 0, 0.28);
+		}
+
+		/* Give the image and complete text layer the same hover motion. */
+		.portfolio-tiles article > .image,
+		.portfolio-tiles article > a {
+			transform-origin: center;
+			transition: transform 0.5s ease;
+		}
+
+		body:not(.is-touch) .portfolio-tiles article:hover > .image,
+		body:not(.is-touch) .portfolio-tiles article:hover > a {
+			transform: none;
+		}
+
+		@media screen and (min-width: 737px) {
+
+			body:not(.is-touch) .portfolio-tiles article:hover {
+				z-index: 4;
+			}
+
+			body:not(.is-touch) .portfolio-tiles article:hover > .image,
+			body:not(.is-touch) .portfolio-tiles article:hover > a {
+				transform: scale(1.1);
+			}
+
+		}
+
+		.portfolio-tiles article:focus-within .content {
+			max-height: 15em;
+			opacity: 1;
+		}
+
+		.portfolio-tiles article > a:focus-visible {
+			outline: 3px solid #f2849e;
+			outline-offset: 4px;
 		}
 
 		@media screen and (max-width: 1280px) {
