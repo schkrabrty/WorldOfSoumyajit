@@ -1,0 +1,45 @@
+url: "https://worldofsoumyajit.com"
+baseurl: ""
+name: "Soumyajit Chakraborty"
+lang: "en"
+profile_image: "https://worldofsoumyajit.s3.amazonaws.com/My+Website+related+Stuffs/WorkImages/IMG_8904_liked-modified.png"
+profile_image_alt: "Soumyajit Chakraborty smiling"
+email: "soumyajit.chakraborty@vanderbilt.edu"
+analytics_id: "G-HMH28VPGTY"
+links:
+  nokia_bell_labs: "https://www.nokia.com/bell-labs/"
+  unity: "https://unity.com"
+  visual_studio_code: "https://code.visualstudio.com/"
+cv:
+  two_page: "https://worldofsoumyajit.s3.us-east-1.amazonaws.com/My+Website+related+Stuffs/Resume/Soumyajit_Chakraborty_Two_Page_CV_Updated.pdf"
+  full: "https://worldofsoumyajit.s3.us-east-1.amazonaws.com/My+Website+related+Stuffs/Resume/Soumyajit_Chakraborty_Full_CV_Updated.pdf"
+social:
+  youtube: "https://www.youtube.com/channel/UC2Onb7CPx6Qrp3DIFwqW-hQ"
+  instagram: "https://www.instagram.com/soumya__chakra/"
+  facebook: "https://www.facebook.com/s0umyaChakra/"
+  twitter: "https://x.com/soumya__chakra"
+  linkedin: "https://www.linkedin.com/in/soumyajit-chakraborty-277bbab0/"
+  github: "https://github.com/schkrabrty"
+  google_scholar: "https://scholar.google.com/citations?user=jqFvVLoAAAAJ&hl=en"
+  researchgate: "https://www.researchgate.net/profile/Soumyajit-Chakraborty"
+asset_versions:
+  main_css: "0f9afdac99a9"
+  blog_css: "7cc0f7d32d52"
+defaults:
+  -
+    scope:
+      path: ""
+      type: "pages"
+    values:
+      layout: "default"
+      sitemap_priority: 0.8
+strict_front_matter: true
+liquid:
+  error_mode: "strict"
+exclude:
+  - "Gemfile"
+  - "Gemfile.lock"
+  - "README.txt"
+  - "Preview Website.command"
+  - "scripts"
+  - "vendor"

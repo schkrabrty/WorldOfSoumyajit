@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="{{ site.lang | default: 'en' }}">
+<head>
+{% include head.html %}
+    <meta http-equiv="refresh" content="0; url={{ page.redirect_to | absolute_url | escape }}" />
+    <script>window.location.replace({{ page.redirect_to | absolute_url | jsonify }});</script>
+</head>
+<body>
+{{ content }}
+</body>
+</html>

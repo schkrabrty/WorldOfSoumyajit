@@ -1,0 +1,38 @@
+{% assign page_title = page.title | default: site.name %}
+{% assign canonical_path = page.canonical | default: page.url %}
+{% assign social_image = page.image | default: site.profile_image %}
+    <title>{{ page_title | escape }}</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="{{ page.viewport | default: 'width=device-width, initial-scale=1, user-scalable=no' | escape }}" />
+    <link rel="icon" href="{{ site.profile_image | escape }}" />
+{% if page.description %}
+    <meta name="description" content="{{ page.description | escape }}" />
+{% endif %}
+{% if page.robots %}
+    <meta name="robots" content="{{ page.robots | escape }}" />
+{% endif %}
+{% unless page.canonical == false %}
+    <link rel="canonical" href="{{ canonical_path | absolute_url | escape }}" />
+{% endunless %}
+    <meta property="og:type" content="{{ page.og_type | default: 'website' | escape }}" />
+    <meta property="og:url" content="{{ canonical_path | absolute_url | escape }}" />
+    <meta property="og:title" content="{{ page.og_title | default: page_title | escape }}" />
+{% if page.description %}
+    <meta property="og:description" content="{{ page.og_description | default: page.description | escape }}" />
+{% endif %}
+    <meta property="og:image" content="{{ social_image | escape }}" />
+{% unless page.assets == false %}
+    <link rel="stylesheet" href="{{ '/assets/css/main.css' | relative_url }}?v={{ site.asset_versions.main_css }}" />
+    <link rel="stylesheet" href="{{ '/assets/css/blog_style.css' | relative_url }}?v={{ site.asset_versions.blog_css }}" />
+{% unless page.lightbox == false %}
+    <link rel="stylesheet" href="{{ '/assets/css/lightbox.min.css' | relative_url }}" />
+    <script src="{{ '/assets/js/lightbox-plus-jquery.min.js' | relative_url }}"></script>
+{% endunless %}
+{% unless page.noscript == false %}
+    <noscript><link rel="stylesheet" href="{{ '/assets/css/noscript.css' | relative_url }}" /></noscript>
+{% endunless %}
+{% endunless %}
+{% if page.structured_data %}
+    <script type="application/ld+json">{{ page.structured_data | jsonify }}</script>
+{% endif %}
+{% include analytics.html %}

@@ -1,0 +1,15 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Preview website",
+            "type": "process",
+            "command": "/bin/bash",
+            "args": ["${workspaceFolder}/scripts/preview_site.sh"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "isBackground": true,
+            "problemMatcher": [],
+            "presentation": { "reveal": "always", "panel": "dedicated" }
+        }
+    ]
+}

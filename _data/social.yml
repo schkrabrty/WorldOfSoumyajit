@@ -1,0 +1,36 @@
+-
+  key: "youtube"
+  label: "YouTube"
+  icon: "brands fa-youtube"
+-
+  key: "instagram"
+  label: "Instagram"
+  icon: "brands fa-instagram"
+-
+  key: "facebook"
+  label: "Facebook"
+  icon: "brands fa-facebook-f"
+-
+  key: "twitter"
+  label: "Twitter"
+  icon: "brands fa-x-twitter"
+-
+  key: "linkedin"
+  label: "LinkedIn"
+  icon: "brands fa-linkedin"
+-
+  key: "github"
+  label: "GitHub"
+  icon: "brands fa-github"
+-
+  key: "google_scholar"
+  label: "Google Scholar"
+  icon: "brands fa-google-scholar"
+-
+  key: "researchgate"
+  label: "Researchgate"
+  icon: "brands fa-researchgate"
+-
+  key: "email"
+  label: "Work Email"
+  icon: "solid fa-envelope"

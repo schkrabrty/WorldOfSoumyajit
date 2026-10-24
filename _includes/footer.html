@@ -1,0 +1,20 @@
+<footer id="footer">
+    <div class="inner">
+        <section>
+            <h2>Follow Me</h2>
+            <ul class="icons">
+{% for item in site.data.social %}
+{% if item.key == 'email' %}
+{% assign social_url = site.email | prepend: 'mailto:' %}
+{% else %}
+{% assign social_url = site.social[item.key] %}
+{% endif %}
+                <li><a href="{{ social_url | escape }}" class="icon {{ item.icon | replace: ' fa-', ' style2 fa-' }}"><span class="label">{{ item.label | escape }}</span></a></li>
+{% endfor %}
+            </ul>
+        </section>
+        <ul class="copyright">
+            <li>&copy; {{ site.name | escape }}. All rights reserved</li>
+        </ul>
+    </div>
+</footer>

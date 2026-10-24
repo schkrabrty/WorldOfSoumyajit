@@ -1,0 +1,16 @@
+-
+  key: "works"
+  label: "My Works"
+  url: "/"
+-
+  key: "photography"
+  label: "My Photography"
+  url: "/blog.html"
+-
+  key: "creativity"
+  label: "My Creative Stuffs"
+  url: "/my-creativity.html"
+-
+  key: "about"
+  label: "About Me"
+  url: "/about.html"

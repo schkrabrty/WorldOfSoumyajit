@@ -1,6 +1,9 @@
+---
+layout: null
+permalink: /robots.txt
+sitemap: false
+---
 User-agent: *
 Disallow: /lightbox2-dev/
-Disallow: /elements.html
-Disallow: /404.html
 
-Sitemap: https://worldofsoumyajit.com/sitemap.xml
+Sitemap: {{ '/sitemap.xml' | absolute_url }}

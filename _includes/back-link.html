@@ -1,0 +1,4 @@
+{% assign section = site.data.navigation | where: 'key', page.section | first %}
+{% if section %}
+<p><a href="{{ section.url | relative_url }}">&larr; Back to {{ section.label | escape }}</a></p>
+{% endif %}

@@ -1,0 +1,7 @@
+{%- assign person = site.data.people[include.id] -%}
+{%- assign label = include.name | default: person.name -%}
+{%- if person.url and person.url != '' -%}
+<a href="{{ person.url | escape }}"{% if include.new_tab %} target="_blank" rel="noopener noreferrer"{% endif %}>{{ label | escape }}</a>
+{%- else -%}
+{{ label | escape }}
+{%- endif -%}
