@@ -37,6 +37,7 @@ class Page(HTMLParser):
         self.meta = {}
         self.links = []
         self.assets = []
+        self.images = []
         self.icons = []
         self.canonicals = []
         self.refreshes = []
@@ -66,6 +67,8 @@ class Page(HTMLParser):
             self._header = True
         if tag == "img" and self._header:
             self.portrait = attrs.get("src")
+        if tag == "img" and attrs.get("src"):
+            self.images.append(attrs["src"])
         if tag == "title":
             self._title = True
         if tag == "meta":
@@ -205,6 +208,15 @@ def validate(destination):
             for key in ["description", "og:title", "og:description", "og:image"]:
                 check(bool(page.meta.get(key)), f"{name}: missing {key}")
     check(public == set(urls), f"Sitemap differs from public pages: missing {sorted(public - set(urls))}; extra {sorted(set(urls) - public)}")
+    catalog = json.loads((Path(__file__).resolve().parents[1] / "_data/tiles.json").read_text())
+    for group, tiles in catalog.items():
+        destinations = [tile["page"] for tile in tiles]
+        check(len(destinations) == len(set(destinations)), f"Duplicate tile in {group}")
+        for tile in tiles:
+            target = urljoin(sitemap_url, tile["page"].lstrip("/"))
+            check(target in public, f"{group}: tile points to a missing or non-public page: {tile['page']}")
+            rendered = Page(tile["html"])
+            check(any(urljoin(sitemap_url, link) == target for link in rendered.links), f"{group}: tile HTML and destination differ: {tile['page']}")
     redirects = json.loads((Path(__file__).resolve().parents[1] / "_data/redirects.json").read_text())
     for old_url, target_url in redirects.items():
         source = local_file(urljoin(sitemap_url, old_url.lstrip("/")))
@@ -227,7 +239,7 @@ def validate(destination):
         if not page.ids["header"]:
             continue
         page_url = page.canonicals[0] if page.canonicals else urljoin(sitemap_url, str(path.relative_to(root)))
-        for reference in page.links + page.assets:
+        for reference in page.links + page.assets + page.images:
             url = urljoin(page_url, reference)
             parts = urlsplit(url)
             if parts.scheme not in ["http", "https"] or parts.netloc != origin.netloc:
@@ -238,7 +250,7 @@ def validate(destination):
             if target in parsed and parts.fragment and not parts.fragment.startswith(":~:text="):
                 fragment = unquote(parts.fragment.split(":~:text=", 1)[0])
                 check(fragment in parsed[target].ids, f"{path.relative_to(root)}: missing anchor {reference}")
-    for internal in ["_includes", "_layouts", "_data", "_plugins", "_config.yml", "Gemfile", "Gemfile.lock", "scripts", "Preview Website.command"]:
+    for internal in ["_includes", "_layouts", "_data", "_plugins", "_config.yml", "Gemfile", "Gemfile.lock", "scripts", "Preview Website.command", "Manage Website.command", ".site-manager"]:
         check(not (root / internal).exists(), f"Internal build file published: {internal}")
     for source in Path(".").glob("google*.html"):
         if source.read_text().startswith("google-site-verification:"):

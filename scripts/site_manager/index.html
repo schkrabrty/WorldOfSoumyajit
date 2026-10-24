@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="manager-token" content="__MANAGER_TOKEN__">
+  <title>Manage your website</title>
+  <link rel="stylesheet" href="/__manager/style.css">
+  <script src="/__manager/app.js" defer></script>
+  <script src="/__manager/media.js" defer></script>
+  <script src="/__manager/storage.js" defer></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-icon">S</span><div><strong>Your website</strong><small>World of Soumyajit</small></div></div>
+    <nav aria-label="Website manager">
+      <button data-view="pages" class="active">Pages</button>
+      <button data-view="arrange">Arrange tiles</button>
+      <button data-view="people">People &amp; profile links</button>
+      <button data-view="storage">S3 files</button>
+      <button data-view="settings">Shared settings</button>
+      <button data-view="history">Recent changes</button>
+      <button data-view="publish">Review &amp; publish</button>
+    </nav>
+    <p class="sidebar-note">Changes stay on your computer until you publish them.</p>
+  </aside>
+  <div class="workspace">
+    <header class="topbar"><span id="build-status" role="status">Preparing your preview…</span><div><button id="rebuild" class="quiet">Rebuild preview</button><a href="/" target="_blank" class="button secondary" id="preview-link">Open website preview ↗</a></div></header>
+    <div id="notice" role="status" hidden></div>
+    <main id="main"><p>Loading your pages…</p></main>
+  </div>
+  <dialog id="dialog"><div class="dialog-heading"><h2 id="dialog-title"></h2><button id="dialog-close" class="icon-button" aria-label="Close dialog">×</button></div><div id="dialog-content"></div></dialog>
+</body>
+</html>

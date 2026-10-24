@@ -40,6 +40,135 @@ The site is built with Jekyll. Root .html files contain page metadata between
 supply the surrounding document, header, menu, footer, styles, and scripts.
 Existing .html addresses are retained through each page's permalink setting.
 
+Managing content with the dashboard
+-----------------------------------
+
+Double-click Manage Website.command in Finder, or choose Terminal > Run Task >
+Manage website in VS Code. The manager opens at:
+
+    http://127.0.0.1:4111/__manager/
+
+Keep its terminal open while working. Press Control-C to stop. It uses Python 3
+and the same Ruby 3.4 setup as the preview launcher; no Python packages or CMS
+account are required. To launch it from a terminal:
+
+    bash "Manage Website.command"
+
+- Pages: choose New page, select its type, and fill in the title, description,
+  writing, and tile details. Research, tutorials, student showcases, photography,
+  creative work, and general pages are supported. Choose an existing page to
+  edit it. The visual editor supports links, linked people, photo galleries,
+  YouTube embeds, and PDFs; an HTML editor is also available.
+- Pictures & videos: every page editor has a panel at the top showing its media
+  count and Add pictures, Add a video, and Replace or remove buttons. These
+  actions edit that page's content directly. Click a picture in the visual
+  editor to edit or remove it; the video edit dialog also has Remove video.
+  Save & build preview applies your changes, and Review & publish sends them
+  to the live website. Index tile pictures use the linked page's tile settings.
+- Photos: upload several files together, or paste existing image URLs, one per
+  line. Each photo has a full-size URL (opened on click), an optional small-image
+  URL (displayed in the gallery), and a caption. You can paste these as:
+  full-size URL | small-image URL | caption. A single URL, or URL | caption,
+  also works. With no small-image URL, the same file is used for both views.
+  Existing small/full-size pairs are preserved. Uploaded media is added to
+  assets/uploads when its page is saved. Existing S3 URLs continue to work.
+  Choose photos from S3 browses the corresponding website folder. Existing
+  small/full-size pairs are filled in together when both objects are known.
+- Manage media: inside the page editor, choose Manage media to see its existing
+  pictures and videos. Replace / edit lets you upload a replacement photo or
+  change its URL, caption, and image description. You may also apply that photo
+  to the tile and sharing image. For videos, replace the YouTube URL or update
+  its title, description, publication timestamp, and starting time. Remove
+  deletes the selected item from the page content. Choose Done, then Save &
+  build preview to save your changes. Existing media files are retained so
+  other pages that use them are unaffected.
+- Videos: paste a YouTube URL and choose Get video details. The manager attempts
+  to retrieve the actual publication timestamp. If it cannot, supply the real
+  upload datetime with its timezone before inserting the video.
+- Arrange tiles: choose a section, move tiles earlier or later, and save.
+  Existing custom image crops, overlays, and awards are retained.
+- People & profile links: add or update collaborators' names, profile URLs, and
+  aliases. Use Add person in the page editor to insert a shared linked name.
+- Shared settings: change the default photo/favicon, email, CV URLs, and social
+  profiles. These settings apply throughout the website.
+- S3 files: browse bucket folders and filter by pictures, PDFs, videos, audio,
+  archives, or all files. Choose from S3 buttons also appear beside page images,
+  tile images, replacement-photo URLs, profile photos, and CV links. The PDF
+  dialog can select an existing S3 PDF. Public access is checked before a link
+  is inserted. The image picker starts in WorkImages, BlogImages, or
+  CreativityImages according to the page section; PDF selection starts in Resume.
+- Delete pages: select one or several detail pages in Pages. You may choose a
+  replacement page for each deleted address. Main index pages are protected.
+  If another page still links to a deleted page, a replacement or a link edit is
+  required. With no replacement, a removed address correctly returns not found.
+- Recent changes: undo the most recent saved operation. Local backups are kept
+  in .site-manager/history, and undo refuses to overwrite later manual edits.
+
+Save & build preview updates the page and tile together. The shared Jekyll
+layout supplies the common header, footer, canonical URL, and sharing metadata;
+the sitemap updates automatically. Renaming a page creates a redirect from its
+previous address and updates existing links and older redirect targets.
+Open website preview to review the resulting pages. Saving stays local.
+
+To publish, open Review & publish and choose Review & validate. The manager runs
+a production build and the site checks, then lists every changed file, including
+manual changes outside the manager. Review this list, enter an update message,
+and choose Publish changes to the website. This commits the listed changes and
+pushes to main on origin; the existing GitHub Pages workflow then deploys them.
+GitHub access and Git author details must already be configured on the computer.
+If files change after review, a new review is required. If pushing fails after a
+commit, the commit remains local and can be pushed with git push origin main.
+
+The manager runs only on this computer. Its source, launchers, dependencies,
+backups, pending uploads, and preview builds are excluded from the live site.
+The unused Font Awesome package sources in assets/js-packages are also excluded
+from builds; the site's actual styles, scripts, and webfonts remain included.
+Undoing an already-published edit creates a local change; publish it again to
+update the live website.
+
+S3 connection and one-time cleanup
+----------------------------------
+
+In S3 files, enter the bucket, AWS region, website folder, and local AWS profile.
+The defaults are worldofsoumyajit, us-east-1, My Website related Stuffs/, and
+worldofsoumyajit. Choose Connect AWS and complete sign-in/MFA directly on AWS's
+browser page. This uses aws login with temporary credentials; no console
+password or access key is stored in the website files. Reconnect when the
+temporary session expires. Connection settings are local to .site-manager.
+
+If AWS CLI 2 is unavailable, choose Install AWS support or run:
+
+    bash scripts/setup_aws.sh
+
+The official AWS installer puts its verified CLI into .site-manager, without a
+system-wide installation. AWS manages sign-in credentials in its standard local
+cache outside the repository. The normal S3 picker only lists and selects files;
+removing media or deleting a page never deletes an S3 object automatically.
+
+The separate one-time cleanup tools are for an explicit audit and deletion:
+
+    python3 scripts/audit_s3.py
+    python3 scripts/cleanup_s3.py backup
+
+The audit checks source HTML, shared configuration/data, styles/scripts, every
+live sitemap page, and links in referenced PDFs. It accounts for full-size
+photos, gallery images, metadata images, CVs, legacy plus-encoded URLs, and
+literal plus signs. Folder markers and objects outside the website folder are
+retained. Review .site-manager/s3-audit/deletion-candidates.csv before deletion.
+
+Only after the audit, backup verification, and explicit approval of that list:
+
+    python3 scripts/cleanup_s3.py delete-all --manifest .site-manager/s3-audit/backup/manifest.json
+
+Alternatively, delete-images keeps unlinked PDFs. The tool checks the current
+website again, skips objects that became referenced or changed, verifies every
+local backup checksum, and uses an ETag condition on each S3 deletion. Backups,
+object metadata/ACLs, and the deletion journal remain in .site-manager/s3-audit.
+They are excluded from Git and the published site. A backed-up object can be
+restored without overwriting a newer S3 object:
+
+    python3 scripts/cleanup_s3.py restore --manifest .site-manager/s3-audit/backup/manifest.json --key "exact S3 object key"
+
 Common settings
 - _config.yml: site name, profile photo (also the favicon and default sharing
   image), email, shared organization and software links, CV links, social URLs, analytics
@@ -49,6 +178,8 @@ Common settings
 - _data/redirects.json: retired .html addresses mapped directly to their current
   pages. _plugins/legacy_redirects.rb generates these pages with the shared
   redirect layout, an immediate meta refresh, a canonical, and a fallback link.
+- _data/tiles.json: ordered tiles for the homepage, photography, and creative
+  indexes. _includes/tiles.html renders them. The dashboard maintains this file.
 - _data/navigation.yml: menu labels and destinations; detail-page back links use
   the same entries.
 - _data/social.yml: footer social-link labels and icons.
@@ -112,10 +243,18 @@ To build and validate the generated output:
     bundle exec jekyll build --trace
     python3 scripts/validate_site.py _site
 
+To test the manager's create, edit, rename, delete, undo, media, and publishing
+operations in temporary copies (including a temporary local Git remote):
+
+    python3 -m unittest discover -s scripts -p 'test_*.py'
+
 The GitHub Pages workflow builds and validates the site before uploading it
 for deployment.
 
 Adding a page
+Use New page in the dashboard for routine additions. It handles the page, tile,
+and related metadata together. To create a source file manually instead:
+
 Create a root .html file with metadata such as:
 
     ---

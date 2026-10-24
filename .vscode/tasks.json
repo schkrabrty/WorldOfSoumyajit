@@ -2,6 +2,16 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "label": "Manage website",
+            "type": "process",
+            "command": "/bin/bash",
+            "args": ["${workspaceFolder}/Manage Website.command"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "isBackground": true,
+            "problemMatcher": [],
+            "presentation": { "reveal": "always", "panel": "dedicated" }
+        },
+        {
             "label": "Preview website",
             "type": "process",
             "command": "/bin/bash",

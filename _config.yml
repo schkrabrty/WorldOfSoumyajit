@@ -38,9 +38,12 @@ strict_front_matter: true
 liquid:
   error_mode: "strict"
 exclude:
+  - ".site-manager"
+  - "assets/js-packages"
   - "Gemfile"
   - "Gemfile.lock"
   - "README.txt"
   - "Preview Website.command"
+  - "Manage Website.command"
   - "scripts"
   - "vendor"
