@@ -57,6 +57,11 @@ Common settings
   showcase, photo, and creative detail pages.
 - _includes/: shared head, analytics, header, menu, footer, scripts, and back link.
 
+The shared favicon uses profile_image with a favicon_version query parameter.
+If the photo is replaced at the same URL or a browser keeps an old tab icon,
+increase favicon_version in _config.yml, restart the local preview, and publish
+the updated build to refresh the icon URL on every page.
+
 Use the shared person include for names in page content:
 
     {% include person.html id="sarah_creem_regehr" name="Sarah H. Creem-Regehr" %}

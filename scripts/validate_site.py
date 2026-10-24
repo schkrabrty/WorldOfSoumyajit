@@ -8,7 +8,7 @@ from html.parser import HTMLParser
 import json
 from pathlib import Path
 import re
-from urllib.parse import unquote, urljoin, urlsplit
+from urllib.parse import parse_qsl, unquote, urlencode, urljoin, urlsplit
 import xml.etree.ElementTree as ET
 
 
@@ -21,6 +21,13 @@ ALIASES = {
 PERSON_PATTERN = re.compile(
     r"(?<!\w)(" + "|".join(re.escape(alias) for alias in sorted(ALIASES, key=len, reverse=True)) + r")(?!\w)"
 )
+
+
+def image_identity(url):
+    """Ignore the favicon cache version when comparing it with the portrait."""
+    parts = urlsplit(url or "")
+    query = [(key, value) for key, value in parse_qsl(parts.query) if key != "favicon"]
+    return parts._replace(query=urlencode(query), fragment="").geturl()
 
 
 class Page(HTMLParser):
@@ -181,7 +188,7 @@ def validate(destination):
         for identifier in ["header", "menu", "main", "footer"]:
             check(page.ids[identifier] == 1, f"{name}: expected one #{identifier}")
         check(page.title.strip(), f"{name}: missing title")
-        check(len(page.icons) == 1 and page.icons[0] == page.portrait, f"{name}: favicon and portrait differ")
+        check(len(page.icons) == 1 and image_identity(page.icons[0]) == image_identity(page.portrait), f"{name}: favicon and portrait differ")
         if page.has_lightbox:
             check(any(urlsplit(asset).path.endswith("/lightbox-plus-jquery.min.js") for asset in page.assets), f"{name}: missing lightbox script")
         for person_id, label, person_url in page.people:

@@ -1,10 +1,14 @@
 {% assign page_title = page.title | default: site.name %}
 {% assign canonical_path = page.canonical | default: page.url %}
 {% assign social_image = page.image | default: site.profile_image %}
+{% assign favicon_separator = '?' %}
+{% if site.profile_image contains '?' %}{% assign favicon_separator = '&' %}{% endif %}
+{% assign favicon_version = site.favicon_version | default: 1 | url_encode %}
+{% assign favicon_url = site.profile_image | append: favicon_separator | append: 'favicon=' | append: favicon_version %}
     <title>{{ page_title | escape }}</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="{{ page.viewport | default: 'width=device-width, initial-scale=1, user-scalable=no' | escape }}" />
-    <link rel="icon" href="{{ site.profile_image | escape }}" />
+    <link rel="icon" href="{{ favicon_url | escape }}" />
 {% if page.description %}
     <meta name="description" content="{{ page.description | escape }}" />
 {% endif %}
