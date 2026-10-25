@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import glob
 import hashlib
 from html import escape, unescape
+from html.parser import HTMLParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import mimetypes
@@ -27,10 +28,13 @@ import webbrowser
 if str(Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 from s3_library import S3Library
-from site_sections import MAIN_PAGES, RESERVED_IDS, SECTIONS_FILE, TILES_FILE, load_sections, section_groups, sections_revision, validate_sections
+from media_descriptions import MediaDescriptions
+from site_documents import content_path, page_sources
+from site_accessibility import content_accessibility_errors
+from site_sections import RESERVED_IDS, SECTIONS_FILE, TILES_FILE, load_sections, main_pages, section_groups, sections_revision, validate_sections
 
 
-PROTECTED = {"index.html", "blog.html", "my-creativity.html", "about.html", "404.html", "elements.html"}
+REQUIRED_PAGES = {"index.html", "404.html", "elements.html"}
 FRONT = re.compile(r"\A---\r?\n(.*?)\r?\n---(?:\r?\n|\Z)", re.S)
 
 
@@ -44,6 +48,47 @@ def digest(data):
 
 def plain(text):
     return " ".join(unescape(re.sub(r"<[^>]*>", " ", text)).split())
+
+
+def clean_empty_gallery_links(body):
+    """Remove editor placeholders without rewriting any other page markup."""
+    class Cleaner(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.lines = [0] + [match.end() for match in re.finditer("\n", body)]
+            self.anchor = None
+            self.removals = []
+
+        def source_index(self):
+            line, column = self.getpos()
+            return self.lines[line - 1] + column
+
+        def handle_starttag(self, tag, attrs):
+            if self.anchor is not None and tag not in {"br", "span", "b", "i", "em", "strong"}:
+                self.anchor[1] = False
+            if tag == "a":
+                self.anchor = [self.source_index(), "data-lightbox" in dict(attrs)]
+
+        def handle_startendtag(self, tag, attrs):
+            if tag != "a":
+                self.handle_starttag(tag, attrs)
+
+        def handle_data(self, data):
+            if self.anchor is not None and data.replace("\u200b", "").strip():
+                self.anchor[1] = False
+
+        def handle_endtag(self, tag):
+            if tag == "a" and self.anchor is not None:
+                if self.anchor[1]:
+                    self.removals.append((self.anchor[0], body.index(">", self.source_index()) + 1))
+                self.anchor = None
+
+    cleaner = Cleaner()
+    cleaner.feed(body)
+    cleaner.close()
+    for start, end in reversed(cleaner.removals):
+        body = body[:start] + body[end:]
+    return body
 
 
 def slugify(text):
@@ -122,13 +167,13 @@ def make_tile(page_url, fields, existing=None, old_url=None):
     return {"page": page_url, "html": text}
 
 
-def rewrite_links(text, old_url, new_url, source_url):
+def rewrite_links(text, old_url, new_url, source_url, anchors=None):
     pattern = re.compile(r"(<a\b[^>]*?\bhref\s*=\s*)([\"'])(.*?)\2", re.S | re.I)
     def replace(match):
         resolved = urlsplit(urljoin("https://worldofsoumyajit.com" + source_url, unescape(match[3])))
         if resolved.netloc not in {"worldofsoumyajit.com", "www.worldofsoumyajit.com"} or resolved.path != old_url:
             return match[0]
-        suffix = ("?" + resolved.query if resolved.query else "") + ("#" + resolved.fragment if resolved.fragment else "")
+        suffix = ("?" + resolved.query if resolved.query else "") + ("#" + resolved.fragment if resolved.fragment and (anchors is None or resolved.fragment in anchors) else "")
         return match[1] + '"' + escape(new_url + suffix, quote=True) + '"'
     return pattern.sub(replace, text).replace("https://worldofsoumyajit.com" + old_url, "https://worldofsoumyajit.com" + new_url)
 
@@ -146,6 +191,20 @@ class SiteManager:
         self.preview = None
         self.review = None
         self.storage = S3Library(self.root)
+        self.descriptions = MediaDescriptions(self.root)
+
+    def description_inventory(self):
+        files, pages, config = self.snapshot()
+        return self.descriptions.inventory(pages, json.loads(files[TILES_FILE]), config)
+
+    def generate_descriptions(self, data):
+        if not self.descriptions.status()["configured"]:
+            raise Problem("The existing OPENAI_API_KEY must be available when starting the manager.")
+        return self.descriptions.generate_inventory(self.description_inventory()["items"])
+
+    def describe_media(self, data):
+        _, _, config = self.snapshot()
+        return self.descriptions.describe({**data, "url": self.descriptions.resolve_url(str(data.get("url", "")), config)})
 
     def yaml(self, action, **payload):
         result = subprocess.run([self.ruby, str(Path(__file__).parent / "site_manager/yaml_bridge.rb")],
@@ -156,7 +215,10 @@ class SiteManager:
 
     def snapshot(self):
         with self.lock:
-            files = {str(p.relative_to(self.root)): p.read_bytes() for p in self.root.glob("*.html") if FRONT.match(p.read_text())}
+            sources = [p for p in page_sources(self.root) if FRONT.match(p.read_text())]
+            if len({p.name for p in sources}) != len(sources):
+                raise Problem("Duplicate page filenames exist in the root and pages folder. Keep one source for each page.")
+            files = {p.name: p.read_bytes() for p in sources}
             for name in [TILES_FILE, SECTIONS_FILE, "_data/people.json", "_data/redirects.json", "_data/navigation.yml", "_config.yml"]:
                 files[name] = (self.root / name).read_bytes()
             pages = {}
@@ -174,7 +236,8 @@ class SiteManager:
         catalog, tiles = load_sections(files)
         section_pages = [{"id": name, **details, **catalog[details["url"]],
                           "sections": [{**section, "count": len(tiles[section["id"]])} for section in catalog[details["url"]]["sections"]]}
-                         for name, details in MAIN_PAGES.items()]
+                         for name, details in main_pages(catalog).items()]
+        main_ids = {page["id"] for page in section_pages}
         groups = {section["id"]: page["title"] + " / " + section["title"] for page in section_pages for section in page["sections"]}
         result = []
         for name, page in pages.items():
@@ -182,14 +245,15 @@ class SiteManager:
                 continue
             placements = [group for group, entries in tiles.items() if any(tile["page"] == page["url"] for tile in entries)]
             result.append({"id": name, "title": page["meta"].get("title", name), "url": page["url"],
-                           "section": page["meta"].get("section", "main"), "protected": name in PROTECTED,
+                           "section": page["meta"].get("section", "main"), "protected": name in main_ids or name in REQUIRED_PAGES,
+                           "main_page": name in main_ids,
                            "groups": placements, "description": page["meta"].get("description", "")})
         return {"pages": sorted(result, key=lambda p: (not p["protected"], p["title"].casefold())), "groups": groups,
-                "section_pages": section_pages, "sections_revision": sections_revision(files),
+                "section_pages": section_pages, "sections_revision": sections_revision(files), "main_pages_revision": self.main_pages_revision(files),
                 "group_categories": {section["id"]: page["category"] for page in section_pages for section in page["sections"]},
                 "people": json.loads(files["_data/people.json"]), "tiles": {group: [{"page": t["page"], **tile_fields(t)} for t in entries] for group, entries in tiles.items()},
-                "storage": self.storage.status(), "settings": {"profile_image": config.get("profile_image", ""), "email": config.get("email", ""),
-                             "cv": config.get("cv", {}), "social": config.get("social", {})}, "history": self.history(), "build": self.build_status}
+                "storage": self.storage.status(), "settings": {"profile_image": config.get("profile_image", ""), "profile_image_alt": config.get("profile_image_alt", ""), "email": config.get("email", ""),
+                             "cv": config.get("cv", {}), "cv_labels": config.get("cv_labels", {}), "social": config.get("social", {})}, "history": self.history(), "build": self.build_status}
 
     def page(self, name):
         files, pages, _ = self.snapshot()
@@ -204,7 +268,9 @@ class SiteManager:
                     page["tile"] = {**tile_fields(tile), "group": group, "position": position}
         heading = re.search(r"<h1\b[^>]*>(.*?)</h1>", page["body"], re.S | re.I)
         page["heading"] = plain(heading[1]) if heading else page["meta"].get("title", "")
-        page["protected"] = name in PROTECTED
+        catalog, _ = load_sections(files)
+        page["main_page"] = name in main_pages(catalog)
+        page["protected"] = page["main_page"] or name in REQUIRED_PAGES
         page.pop("text")
         return page
 
@@ -214,7 +280,7 @@ class SiteManager:
         if not changed:
             return None
         for name in changed:
-            path = self.root / name
+            path = content_path(self.root, name)
             if not path.resolve().is_relative_to(self.root):
                 raise Problem("Invalid file path.")
             actual = path.read_bytes() if path.exists() else None
@@ -240,7 +306,7 @@ class SiteManager:
         return identifier
 
     def write(self, name, data):
-        path = self.root / name
+        path = content_path(self.root, name)
         if data is None:
             path.unlink(missing_ok=True)
         else:
@@ -268,7 +334,7 @@ class SiteManager:
             entry = json.loads(path.read_text())
             current_versions = {}
             for name, version in entry["files"].items():
-                current = self.root / name
+                current = content_path(self.root, name)
                 actual = current.read_bytes() if current.exists() else None
                 if digest(actual) != version["after"]:
                     raise Problem("This file changed after that operation. Undo would overwrite it: " + name)
@@ -291,7 +357,10 @@ class SiteManager:
     def save(self, data):
         with self.lock:
             before, pages, _ = self.snapshot()
+            catalog, tiles = load_sections(before)
+            main = main_pages(catalog)
             name = data.get("id")
+            protected = name in main or name in REQUIRED_PAGES
             existing = pages.get(name)
             if name and not existing:
                 raise Problem("This page no longer exists.")
@@ -302,37 +371,43 @@ class SiteManager:
             if not title or not description:
                 raise Problem("Enter a page title and a search description.")
             slug = str(data.get("slug", "")).strip()
-            if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", slug) and name not in PROTECTED:
+            if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", slug) and not protected:
                 raise Problem("The page address must use lowercase English letters, numbers, and hyphens.")
-            filename = name if name in PROTECTED else slug + ".html"
-            target_url = existing["url"] if name in PROTECTED else "/" + filename
+            filename = name if protected else slug + ".html"
+            target_url = existing["url"] if protected else "/" + filename
             redirects = json.loads(before["_data/redirects.json"])
             if filename != name:
-                occupied = {path.name.casefold() for path in self.root.glob("*.html")}
+                occupied = {path.name.casefold() for path in page_sources(self.root)}
                 occupied.update(path.lstrip("/").casefold() for path in redirects)
                 if filename.casefold() in occupied:
                     raise Problem("That address is already used by a page or a historical redirect.")
             section = data.get("section", "works")
-            if section not in {"works", "photography", "creativity", "about", "main"}:
+            if section not in {page["category"] for page in main.values()} | {"main"}:
                 raise Problem("Choose a valid page section.")
             meta = copy.deepcopy(data.get("metadata") if isinstance(data.get("metadata"), dict) else existing["meta"] if existing else {})
             meta.update({"title": title, "description": description, "permalink": target_url})
-            if name not in PROTECTED:
+            if not protected:
                 meta.update({"layout": "detail", "section": section, "content_type": data.get("type", "general")})
             image = valid_url(data.get("image"))
             if image:
                 meta["image"] = image
             else:
                 meta.pop("image", None)
-            body = str(data.get("body", ""))
+            body = clean_empty_gallery_links(str(data.get("body", "")))
             if not plain(body) and not re.search(r"<(?:img|iframe)\b", body, re.I):
                 raise Problem("Add some page content.")
             if re.search(r"<script\b|\son\w+\s*=", body, re.I):
                 raise Problem("Use static page content; scripts and inline event handlers are not supported by the editor.")
+            accessibility_errors = content_accessibility_errors(body)
+            if accessibility_errors:
+                raise Problem("Accessibility: " + " ".join(accessibility_errors))
             heading = str(data.get("heading") or title).strip()
             old_heading = re.search(r"<h1\b[^>]*>(.*?)</h1>", existing["body"] if existing else "", re.S | re.I)
             if not existing:
-                body = '<h1 align="center">' + escape(heading) + '</h1>\n' + body
+                if re.search(r"<h1\b", body, re.I):
+                    body = re.sub(r"(<h1\b[^>]*>).*?(</h1>)", lambda m: m[1] + escape(heading) + m[2], body, count=1, flags=re.S | re.I)
+                else:
+                    body = '<h1 align="center">' + escape(heading) + '</h1>\n' + body
             elif old_heading and heading != plain(old_heading[1]):
                 body = re.sub(r"(<h1\b[^>]*>).*?(</h1>)", lambda m: m[1] + escape(heading) + m[2], body, count=1, flags=re.S | re.I)
             schemas = meta.get("structured_data", [])
@@ -405,10 +480,23 @@ class SiteManager:
         with self.lock:
             before, pages, _ = self.snapshot()
             choices = data.get("pages", [])
+            if not isinstance(choices, list) or any(not isinstance(entry, dict) for entry in choices):
+                raise Problem("Choose the pages to delete.")
             selected = {entry.get("id") for entry in choices}
-            if not selected or selected & PROTECTED or not selected <= pages.keys():
-                raise Problem("Choose existing detail pages. Main index pages cannot be deleted.")
+            catalog, tiles = load_sections(before)
+            main = main_pages(catalog)
+            selected_main = selected & main.keys()
+            if not selected or len(selected) != len(choices) or selected & REQUIRED_PAGES or not selected <= pages.keys():
+                raise Problem("Choose existing pages. The homepage is required and cannot be deleted.")
+            if selected_main and data.get("main_pages_revision") != self.main_pages_revision(before):
+                raise Problem("The website changed after you opened this form. Reload the page list before deleting main pages.")
             replacements = {}
+            categories, moved_sections = {}, {}
+            navigation = None
+            if selected_main:
+                navigation = self.yaml("load", documents=[before["_data/navigation.yml"].decode()])[0]
+                if not isinstance(navigation, list) or any(not isinstance(item, dict) for item in navigation):
+                    raise Problem("The website navigation must be a list of pages.")
             for choice in choices:
                 page = pages[choice["id"]]
                 if choice.get("revision") != page["revision"]:
@@ -417,6 +505,36 @@ class SiteManager:
                 if replacement and not any(p["url"] == replacement and p["id"] not in selected for p in pages.values()):
                     raise Problem("Choose a replacement page that is not also being deleted.")
                 replacements[page["url"]] = replacement
+                if choice["id"] in selected_main:
+                    destination = next((item for name, item in main.items() if item["url"] == replacement and name not in selected), None)
+                    if not destination:
+                        raise Problem("Choose a remaining main page for existing links and back links.")
+                    if choice.get("tile_action") not in {"move", "hide"}:
+                        raise Problem("Choose whether to move or remove each main page's sections and tiles.")
+                    source = main[choice["id"]]
+                    categories[source["category"]] = destination["category"]
+                    settings = catalog[source["url"]]
+                    if choice["tile_action"] == "move":
+                        destination_id = next(name for name, item in main.items() if item["url"] == replacement)
+                        anchors = set(re.findall(r'''\bid\s*=\s*["']([^"']+)''', pages[destination_id]["body"], re.I))
+                        for section in settings["sections"]:
+                            if {section["id"], section["id"] + "-heading"} & anchors:
+                                raise Problem("The replacement already uses a section anchor. Choose another main page or remove these sections.")
+                        moved_sections.setdefault(replacement, []).extend(settings["sections"])
+                    else:
+                        for section in settings["sections"]: tiles.pop(section["id"])
+                    catalog.pop(source["url"])
+            for url, sections in moved_sections.items():
+                catalog[url]["sections"] = sections + catalog[url]["sections"]
+            replacement_anchors = {}
+            for name in selected_main:
+                target = replacements[main[name]["url"]]
+                destination_id = next(key for key, item in main.items() if item["url"] == target)
+                anchors = set(RESERVED_IDS) | set(re.findall(r'''\bid\s*=\s*["']([^"']+)''', pages[destination_id]["body"], re.I))
+                for section in catalog[target]["sections"]:
+                    anchors.add(section["id"])
+                    if section["show_heading"]: anchors.add(section["id"] + "-heading")
+                replacement_anchors[main[name]["url"]] = anchors
             writes = {name: None for name in selected}
             for page in pages.values():
                 if page["id"] in selected:
@@ -424,18 +542,28 @@ class SiteManager:
                 text = page["text"]
                 for old, new in replacements.items():
                     if new:
-                        text = rewrite_links(text, old, new, page["url"])
+                        text = rewrite_links(text, old, new, page["url"], replacement_anchors.get(old))
                     elif rewrite_links(text, old, "/__removed__", page["url"]) != text:
                         raise Problem(page["meta"].get("title", page["id"]) + " still links to the deleted page. Choose a replacement or edit that link first.")
+                category = page["meta"].get("section")
+                if category in categories:
+                    meta = {**page["meta"], "section": categories[category]}
+                    text = self.yaml("dump", data=meta).rstrip() + "\n---\n" + text[FRONT.match(text).end():]
                 if text != page["text"]:
                     writes[page["id"]] = text.encode()
-            tiles = json.loads(before["_data/tiles.json"])
             for group in tiles:
                 tiles[group] = [t for t in tiles[group] if t["page"] not in replacements]
+                for tile in tiles[group]:
+                    for old, new in replacements.items():
+                        if new: tile["html"] = rewrite_links(tile["html"], old, new, "/", replacement_anchors.get(old))
             redirects = json.loads(before["_data/redirects.json"])
             redirects = {old: replacements.get(target, target) for old, target in redirects.items() if target not in replacements or replacements[target]}
             redirects.update({old: new for old, new in replacements.items() if new})
             writes.update({"_data/tiles.json": self.json_bytes(tiles), "_data/redirects.json": self.json_bytes(redirects)})
+            if selected_main:
+                navigation = [item for item in navigation if item.get("url") not in replacements]
+                writes.update({SECTIONS_FILE: self.json_bytes(catalog), "_data/navigation.yml": self.yaml("dump", data=navigation).encode()})
+            validate_sections(catalog, tiles)
             self.commit("Delete " + ", ".join(pages[name]["meta"].get("title", name) for name in sorted(selected)), writes, before)
         self.start_build()
         return {"message": "Selected pages removed. You can restore them from Recent changes."}
@@ -455,15 +583,86 @@ class SiteManager:
         self.start_build()
         return {"message": "Tile order saved."}
 
+    @staticmethod
+    def main_pages_revision(files):
+        return digest(b"\0".join(name.encode() + b"\0" + files[name] for name in sorted(files)))
+
+    def manage_main_pages(self, data):
+        with self.lock:
+            before, pages, _ = self.snapshot()
+            if data.get("revision") != self.main_pages_revision(before):
+                raise Problem("The website changed after you opened this form. Reload the main pages before saving.")
+            catalog, tiles = load_sections(before)
+            main = main_pages(catalog)
+            navigation = self.yaml("load", documents=[before["_data/navigation.yml"].decode()])[0]
+            if not isinstance(navigation, list) or any(not isinstance(item, dict) for item in navigation):
+                raise Problem("The website navigation must be a list of pages.")
+            writes = {}
+            action = data.get("action")
+            if action == "create":
+                title, description = (str(data.get(key, "")).strip() for key in ["title", "description"])
+                slug = str(data.get("slug", "")).strip()
+                if not title or len(title) > 120 or not description:
+                    raise Problem("Enter a title up to 120 characters and a search description.")
+                if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", slug):
+                    raise Problem("The page address must use lowercase English letters, numbers, and hyphens.")
+                filename, url = slug + ".html", "/" + slug + ".html"
+                redirects = json.loads(before["_data/redirects.json"])
+                occupied = {path.name.casefold() for path in page_sources(self.root)} | {key.lstrip("/").casefold() for key in redirects}
+                if filename.casefold() in occupied:
+                    raise Problem("That address is already used by a page or a historical redirect.")
+                category, suffix = "page-" + slug, 2
+                keys = {item.get("key") for item in navigation} | {page["category"] for page in main.values()}
+                while category in keys:
+                    category = "page-" + slug + "-" + str(suffix);suffix += 1
+                section_title = str(data.get("section_title") or "Pages").strip()
+                if not section_title or len(section_title) > 120:
+                    raise Problem("Enter a section title between 1 and 120 characters.")
+                base = slugify(section_title)
+                if not base[0].isalpha(): base = "section-" + base
+                used = set(RESERVED_IDS)
+                for identifier in section_groups(catalog): used.update({identifier, identifier + "-heading"})
+                identifier, suffix = base, 2
+                while identifier in used or identifier + "-heading" in used:
+                    identifier = base + "-" + str(suffix);suffix += 1
+                catalog[url] = {"title": title, "category": category, "navigation": False,
+                                "sections": [{"id": identifier, "title": section_title, "show_heading": True}]}
+                tiles[identifier] = []
+                navigation.append({"key": category, "label": title, "url": url})
+                meta = {"title": title, "description": description, "permalink": url, "layout": "default", "section": "main", "sitemap_priority": 0.9}
+                writes[filename] = (self.yaml("dump", data=meta).rstrip() + "\n---\n<header><h1>" + escape(title)
+                                    + "</h1><p>" + escape(description) + "</p></header>\n").encode()
+                label = "Create main page " + title
+            elif action == "delete":
+                filename, replacement = data.get("page"), data.get("replacement")
+                if filename == "index.html": raise Problem("The homepage is required and cannot be deleted.")
+                if filename not in main or filename not in pages: raise Problem("Choose an existing main page.")
+                if replacement not in main or replacement == filename or replacement not in pages:
+                    raise Problem("Choose another main page for existing links and back links.")
+                result = self.delete({"main_pages_revision": self.main_pages_revision(before), "pages": [{
+                    "id": filename, "revision": pages[filename]["revision"],
+                    "replacement": main[replacement]["url"], "tile_action": data.get("tile_action")} ]})
+                return {"id": filename, **result}
+            else:
+                raise Problem("Choose a valid main-page operation.")
+            validate_sections(catalog, tiles)
+            writes.update({SECTIONS_FILE: self.json_bytes(catalog), TILES_FILE: self.json_bytes(tiles),
+                           "_data/navigation.yml": self.yaml("dump", data=navigation).encode()})
+            self.commit(label, writes, before)
+        self.start_build()
+        return {"id": filename, "message": "Main page created and added to the menu." if action == "create" else
+                "Main page deleted. Linked pages are kept, and links now use the replacement. Undo is available in Recent changes."}
+
     def manage_sections(self, data):
         with self.lock:
             before, pages, _ = self.snapshot()
             catalog, tiles = load_sections(before)
+            main = main_pages(catalog)
             if data.get("revision") != sections_revision(before):
                 raise Problem("Sections or tiles changed after you opened this screen. Reload Sections before saving.")
             page = data.get("page")
-            if page not in MAIN_PAGES: raise Problem("Choose a main page for these sections.")
-            settings = catalog[MAIN_PAGES[page]["url"]]
+            if page not in main: raise Problem("Choose a main page for these sections.")
+            settings = catalog[main[page]["url"]]
             action = data.get("action")
             identifier = data.get("id")
             section = next((item for item in settings["sections"] if item["id"] == identifier), None)
@@ -495,11 +694,11 @@ class SiteManager:
                     raise Problem("The section order must contain every section exactly once.")
                 lookup = {item["id"]: item for item in settings["sections"]}
                 settings["sections"] = [lookup[item] for item in order]
-                label = "Arrange sections on " + MAIN_PAGES[page]["title"]
+                label = "Arrange sections on " + main[page]["title"]
             elif action == "navigation":
                 if not isinstance(data.get("navigation"), bool): raise Problem("Choose whether section links are shown.")
                 settings["navigation"] = data["navigation"]
-                label = "Update section links on " + MAIN_PAGES[page]["title"]
+                label = "Update section links on " + main[page]["title"]
             elif action == "delete":
                 if tiles[identifier]:
                     disposition = data.get("tile_action")
@@ -528,9 +727,12 @@ class SiteManager:
             if photo != config.get("profile_image"):
                 config["favicon_version"] = int(config.get("favicon_version", 1)) + 1
             config["profile_image"] = photo
+            config["profile_image_alt"] = str(data.get("profile_image_alt", config.get("profile_image_alt", ""))).strip()
             config["email"] = str(data.get("email", "")).strip()
             for field in ["two_page", "full"]:
                 config.setdefault("cv", {})[field] = valid_url(data.get("cv", {}).get(field))
+                if field in data.get("cv_labels", {}):
+                    config.setdefault("cv_labels", {})[field] = str(data["cv_labels"][field]).strip()
             for field, value in data.get("social", {}).items():
                 if field in config.get("social", {}):
                     config["social"][field] = valid_url(value)
@@ -760,6 +962,7 @@ class Handler(BaseHTTPRequestHandler):
                 if path == "/api/state": result = self.manager.state()
                 elif path == "/api/page": result = self.manager.page(parse_qs(urlsplit(self.path).query).get("id", [""])[0])
                 elif path == "/api/status": result = self.manager.build_status
+                elif path == "/api/descriptions": result = self.manager.description_inventory()
                 elif path == "/api/s3/status": result = self.manager.storage.status()
                 elif path == "/api/s3/files":
                     query = parse_qs(urlsplit(self.path).query)
@@ -807,7 +1010,8 @@ class Handler(BaseHTTPRequestHandler):
                 raise Problem("Choose a file smaller than 25 MB.")
             data = json.loads(self.rfile.read(size))
             operations = {"save": self.manager.save, "delete": self.manager.delete, "undo": self.manager.undo,
-                          "reorder": self.manager.reorder, "sections": self.manager.manage_sections, "settings": self.manager.settings, "person": self.manager.person,
+                          "describe-media": self.manager.describe_media, "descriptions/generate": self.manager.generate_descriptions,
+                          "reorder": self.manager.reorder, "sections": self.manager.manage_sections, "main-pages": self.manager.manage_main_pages, "settings": self.manager.settings, "person": self.manager.person,
                           "upload": self.manager.upload, "video": self.manager.video, "review": lambda _: self.manager.review_changes(),
                           "publish": self.manager.publish, "build": lambda _: self.manager.start_build(),
                           "s3/configure": self.manager.storage.configure, "s3/connect": lambda _: self.manager.storage.connect(),

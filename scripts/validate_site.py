@@ -10,7 +10,8 @@ from pathlib import Path
 import re
 from urllib.parse import parse_qsl, unquote, urlencode, urljoin, urlsplit
 import xml.etree.ElementTree as ET
-from site_sections import MAIN_PAGES, validate_sections
+from site_sections import main_pages, validate_sections
+from site_accessibility import content_accessibility_errors
 
 
 PEOPLE = json.loads((Path(__file__).resolve().parents[1] / "_data/people.json").read_text())
@@ -47,6 +48,10 @@ class Page(HTMLParser):
         self.schemas = []
         self.people = []
         self.has_lightbox = False
+        self.language = ""
+        self.main_landmarks = 0
+        self.skip_links = 0
+        self.accessibility_errors = content_accessibility_errors(text)
         self.sections = []
         self.section_links = []
         self._section_navigation = False
@@ -61,6 +66,9 @@ class Page(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
+        if tag == "html": self.language = attrs.get("lang", "")
+        if tag == "main": self.main_landmarks += 1
+        if tag == "a" and attrs.get("href") == "#main" and "skip-link" in attrs.get("class", "").split(): self.skip_links += 1
         if tag == "body":
             self._body = True
         if tag == "section" and "portfolio-section" in attrs.get("class", "").split():
@@ -198,6 +206,11 @@ def validate(destination, source_root=None):
             video_dates += 1
         if not page.ids["header"]:
             continue
+        check(bool(page.language.strip()), f"{name}: set the document language")
+        check(page.main_landmarks == 1, f"{name}: expected one main landmark")
+        check(page.skip_links == 1, f"{name}: expected a skip-to-content link")
+        check(not re.search(r"user-scalable\s*=\s*(?:no|0)|maximum-scale\s*=\s*1(?:\D|$)", page.meta.get("viewport", ""), re.I), f"{name}: allow browser zoom")
+        for error in page.accessibility_errors: check(False, f"{name}: {error}")
         check("{{" not in text and "{%" not in text, f"{name}: unrendered template")
         for identifier in ["header", "menu", "main", "footer"]:
             check(page.ids[identifier] == 1, f"{name}: expected one #{identifier}")
@@ -225,7 +238,7 @@ def validate(destination, source_root=None):
         validate_sections(section_catalog, catalog)
     except ValueError as error:
         check(False, str(error))
-    for details in MAIN_PAGES.values():
+    for details in main_pages(section_catalog).values():
         settings = section_catalog.get(details["url"], {})
         target = local_file(urljoin(sitemap_url, details["url"].lstrip("/") or "./"))
         page = parsed.get(target)

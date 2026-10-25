@@ -9,7 +9,7 @@
 {% else %}
 {% assign social_url = site.social[item.key] %}
 {% endif %}
-                <li><a href="{{ social_url | escape }}" class="icon {{ item.icon | replace: ' fa-', ' style2 fa-' }}"><span class="label">{{ item.label | escape }}</span></a></li>
+                <li><a href="{{ social_url | escape }}" aria-label="{{ item.label | escape }}" class="icon {{ item.icon | replace: ' fa-', ' style2 fa-' }}"><span class="label">{{ item.label | escape }}</span></a></li>
 {% endfor %}
             </ul>
         </section>

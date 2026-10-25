@@ -12,6 +12,106 @@ function sourceURL(image){return image.dataset.sourceUrl||image.getAttribute("sr
 function mediaChanged(){bodyDirty=true;contentDirty=true;}
 function mediaURL(value){return /^https?:\/\//.test(value)||value.startsWith("/assets/");}
 
+function mediaOrderButtons(index,total,title){
+ return `<div class="media-order"><span class="drag-handle" aria-hidden="true">⠿</span><button type="button" class="icon-button" data-order-direction="-1" ${index===0?'disabled':''} aria-label="Move ${esc(title)} earlier">↑</button><button type="button" class="icon-button" data-order-direction="1" ${index===total-1?'disabled':''} aria-label="Move ${esc(title)} later">↓</button></div>`;
+}
+
+function bindMediaOrder(list,move,enabled=()=>true){
+ list.cancelMediaDrag?.();
+ let dragging=null,pointer=null,frame=null,lastTime=null;
+ const modal=list.closest('dialog');
+ const clearTargets=()=>list.querySelectorAll('.drop-before,.drop-after').forEach(row=>row.classList.remove('drop-before','drop-after'));
+ const clear=()=>list.querySelectorAll('.dragging,.drop-before,.drop-after').forEach(row=>row.classList.remove('dragging','drop-before','drop-after'));
+ const rowFor=event=>event.target.closest('[data-order-index]');
+ const stopScrolling=()=>{if(frame!==null)cancelAnimationFrame(frame);frame=null;lastTime=null;pointer=null;};
+ const finish=()=>{stopScrolling();dragging=null;clear();};
+ list.cancelMediaDrag=finish;
+ const rowAt=(x,y,fallback)=>{
+  const element=document.elementFromPoint?.(x,y),row=element?.closest('[data-order-index]');
+  if(row&&list.contains(row))return row;
+  if(!element)return fallback;
+  if(element===list){
+   const rows=[...list.querySelectorAll('[data-order-index]')];
+   return rows.find(item=>item.getBoundingClientRect().bottom>=y)||rows.at(-1);
+  }
+  return null;
+ };
+ const markTarget=row=>{
+  clearTargets();
+  if(row&&Number(row.dataset.orderIndex)!==dragging){
+   const rect=row.getBoundingClientRect();row.classList.add(pointer.y>rect.top+rect.height/2?'drop-after':'drop-before');
+  }
+ };
+ const scrollFrame=time=>{
+  frame=null;
+  if(dragging===null||!pointer||!list.isConnected||!enabled()||(modal&&!modal.open)){finish();return;}
+  const rect=list.getBoundingClientRect(),dialogRect=modal?.getBoundingClientRect();
+  const top=Math.max(rect.top,dialogRect?.top??0,0),bottom=Math.min(rect.bottom,dialogRect?.bottom??innerHeight,innerHeight);
+  const edge=Math.min(64,(bottom-top)/3);
+  let speed=0;
+  if(edge>0&&pointer.x>=rect.left&&pointer.x<=rect.right&&pointer.y>=top&&pointer.y<=bottom){
+   if(pointer.y<top+edge)speed=-600*(1-(pointer.y-top)/edge);
+   else if(pointer.y>bottom-edge)speed=600*(1-(bottom-pointer.y)/edge);
+  }
+  const elapsed=Math.min(lastTime===null?16:time-lastTime,40);lastTime=time;
+  if(speed){
+   list.scrollTop=Math.max(0,Math.min(list.scrollTop+speed*elapsed/1000,list.scrollHeight-list.clientHeight));
+   markTarget(rowAt(pointer.x,pointer.y));
+   frame=requestAnimationFrame(scrollFrame);
+  }
+ };
+ list.ondragstart=event=>{
+  finish();
+  const row=rowFor(event);
+  if(!row||!enabled()||event.target.closest('input,textarea,select,button')){event.preventDefault();return;}
+  dragging=Number(row.dataset.orderIndex);event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',String(dragging));row.classList.add('dragging');
+ };
+ list.ondragover=event=>{
+  if(dragging===null||!enabled())return;
+  event.preventDefault();event.dataTransfer.dropEffect='move';pointer={x:event.clientX,y:event.clientY};
+  markTarget(rowAt(pointer.x,pointer.y,rowFor(event)));
+  if(frame===null){lastTime=null;frame=requestAnimationFrame(scrollFrame);}
+ };
+ list.ondragleave=event=>{const rect=list.getBoundingClientRect();if(!list.contains(event.relatedTarget)&&(event.relatedTarget||event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)){stopScrolling();clearTargets();}};
+ list.ondrop=event=>{
+  if(dragging===null)return;
+  event.preventDefault();event.stopPropagation();
+  const row=rowAt(event.clientX,event.clientY,rowFor(event)),from=dragging;finish();
+  if(row&&enabled()){
+   const boundary=Number(row.dataset.orderIndex)+(event.clientY>row.getBoundingClientRect().top+row.getBoundingClientRect().height/2?1:0);
+   const to=boundary-(from<boundary?1:0);clear();if(from!==to)move(from,to);
+  }else clear();
+ };
+ list.ondragend=finish;
+ list.querySelectorAll('[data-order-direction]').forEach(button=>button.onclick=()=>{
+  if(!enabled())return;
+  const from=Number(button.closest('[data-order-index]').dataset.orderIndex),direction=Number(button.dataset.orderDirection),to=from+direction;
+  move(from,to);
+  const row=list.querySelector(`[data-order-index="${to}"]`),next=row?.querySelector(`[data-order-direction="${direction}"]:not(:disabled)`);
+  (next||row)?.focus();
+ });
+}
+
+// Move the complete picture/link/figure so its caption and original URL travel together.
+function pageMediaUnit(item){
+ let unit=item;
+ while(unit.parentElement&&unit.parentElement.id!=='editor'){
+  const parent=unit.parentElement;
+  if(parent.querySelectorAll('img,iframe').length!==1)break;
+  if(parent.matches('a,picture,figure,.videoWrapper')||(parent.matches('p,div,span')&&!parent.textContent.trim()))unit=parent;
+  else break;
+ }
+ return unit;
+}
+
+function movePageMedia(item,target,after){
+ const unit=pageMediaUnit(item),destination=pageMediaUnit(target),gallery=item.closest('.gallery');
+ if(unit===destination||unit.contains(destination)||destination.contains(unit))return;
+ destination.parentNode.insertBefore(unit,after?destination.nextSibling:destination);
+ if(gallery&&!gallery.querySelector('img,iframe')&&!gallery.textContent.trim())gallery.remove();
+ savedRange=null;mediaChanged();
+}
+
 function bindMediaControls(editor){
  const heading=$('#heading-level');
  const updateHeading=()=>{
@@ -41,7 +141,7 @@ function bindMediaControls(editor){
 function removePageMedia(item){
  if(item.tagName==='IMG'){
   const anchor=item.closest('a[data-lightbox]'),gallery=item.closest('.gallery');item.remove();
-  if(anchor&&!anchor.children.length&&!anchor.textContent.trim())anchor.remove();
+  if(anchor&&!anchor.querySelector('img,picture,video,iframe')&&!anchor.textContent.trim())anchor.remove();
   if(gallery&&!gallery.querySelector('img')&&!gallery.textContent.trim())gallery.remove();
  }else{
   const wrapper=item.closest('.videoWrapper');item.remove();
@@ -52,25 +152,32 @@ function removePageMedia(item){
 
 function mediaDialog(){
  if(htmlMode)$("#html-toggle").click();
- const items=[...$("#editor").querySelectorAll("img,iframe")];
- showDialog("Manage pictures & videos",`<p class="muted">Replace a picture or video, update its details, or remove it from this page.</p>
- <div class="media-list">${items.map((item,i)=>{
-  const photo=item.tagName==="IMG",id=photo?null:youtubeId(item.getAttribute("src"));
-  const url=photo?sourceURL(item):item.getAttribute("src");
-  const title=photo?(item.getAttribute("alt")||`Photo ${i+1}`):(item.getAttribute("title")||`Video ${i+1}`);
-  const thumbnail=photo?item.getAttribute("src"):id?`https://img.youtube.com/vi/${id}/hqdefault.jpg`:"";
-  return `<div class="media-row">${thumbnail?`<img class="media-thumb" src="${esc(thumbnail)}" alt="" loading="lazy">`:'<span class="media-thumb media-placeholder">Video</span>'}<div class="media-description"><strong>${esc(title)}</strong><small>${esc(url)}</small></div><div class="media-actions"><button class="secondary" data-replace-media="${i}" ${!photo&&!id?'disabled':''}>Replace / edit</button><button class="quiet" data-remove-media="${i}">Remove</button></div></div>`;
- }).join("")||'<p class="empty">There are no pictures or videos in the page content yet.</p>'}</div>
+ showDialog("Manage pictures, videos & PDFs",`<p class="muted">Drag pictures or videos into your preferred order, or use the arrow buttons. You can also edit or remove them.</p>
+ <div class="media-list" id="page-media-list" aria-label="Page media order"></div><p id="media-order-status" class="hint" role="status" aria-live="polite"></p>
  <p class="hint">The picture on the index tile is controlled separately in the Page tile panel. These edits take effect when you save the page.</p>
  <div class="dialog-actions"><button id="media-done">Done</button></div>`,()=>{
-  $("#media-done").onclick=()=>dialog.close();
-  document.querySelectorAll("[data-replace-media]").forEach(button=>button.onclick=()=>{
-   const item=items[Number(button.dataset.replaceMedia)];if(item.tagName==="IMG")photoEditDialog(item);else videoDialog(item);
+  const draw=()=>{
+   const items=[...$("#editor").querySelectorAll('img,iframe,a[href$=".pdf" i]')],list=$('#page-media-list');
+   list.innerHTML=items.map((item,i)=>{
+  const photo=item.tagName==="IMG",pdf=item.tagName==="A",id=photo||pdf?null:youtubeId(item.getAttribute("src"));
+  const url=photo?sourceURL(item):item.getAttribute(pdf?"href":"src");
+  const title=photo?(item.getAttribute("alt")||`Photo ${i+1}`):pdf?item.textContent:(item.getAttribute("title")||`Video ${i+1}`);
+  const thumbnail=photo?item.getAttribute("src"):id?`https://img.youtube.com/vi/${id}/hqdefault.jpg`:"";
+  return `<div class="media-row reorder-row" draggable="true" tabindex="-1" data-order-index="${i}" aria-label="${esc(title)}, position ${i+1} of ${items.length}">${mediaOrderButtons(i,items.length,title)}${thumbnail?`<img class="media-thumb" src="${esc(thumbnail)}" alt="" loading="lazy" draggable="false">`:'<span class="media-thumb media-placeholder">Video</span>'}<div class="media-description"><strong>${esc(title)}</strong><small>${esc(url)}</small></div><div class="media-actions"><button class="secondary" data-replace-media="${i}" ${!photo&&!pdf&&!id?'disabled':''}>Replace / edit</button><button class="quiet" data-remove-media="${i}">Remove</button></div></div>`;
+ }).join("")||'<p class="empty">There are no pictures or videos in the page content yet.</p>';
+  bindMediaOrder(list,(from,to)=>{
+   movePageMedia(items[from],items[to],to>from);draw();
+   $('#media-order-status').textContent=`Moved to position ${to+1} of ${items.length}. Save the page to keep this order.`;
   });
-  document.querySelectorAll("[data-remove-media]").forEach(button=>button.onclick=()=>{
+  list.querySelectorAll("[data-replace-media]").forEach(button=>button.onclick=()=>{
+   const item=items[Number(button.dataset.replaceMedia)];if(item.tagName==="IMG")photoEditDialog(item);else if(item.tagName==="A")documentDialog(item);else videoDialog(item);
+  });
+  list.querySelectorAll("[data-remove-media]").forEach(button=>button.onclick=()=>{
    const item=items[Number(button.dataset.removeMedia)];
    removePageMedia(item);mediaDialog();
   });
+  };
+  draw();$("#media-done").onclick=()=>dialog.close();
  });
 }
 
@@ -87,6 +194,8 @@ function photoEditDialog(image){
  <label>Image description<input id="replacement-alt" value="${esc(image.getAttribute("alt")||originalCaption)}"></label>
  <label class="check-label"><input type="checkbox" id="replacement-use-tile" ${matchingTile||matchingSharing?'checked':''}>Also use this picture for the page tile and sharing image</label>
  <div class="dialog-actions"><button class="secondary" id="replacement-back">Back</button><button class="quiet" id="remove-picture">Remove picture</button><button id="apply-photo">Update picture</button></div>`,()=>{
+  attachDescriptionSuggestion($("#replacement-caption"),()=>({kind:"image",url:$("#replacement-url").value,context:$("#replacement-caption").value}),"title");
+  attachDescriptionSuggestion($("#replacement-alt"),()=>({kind:"image",url:$("#replacement-url").value,context:$("#replacement-caption").value}));
   attachS3Field($("#replacement-url"));attachS3Field($("#replacement-thumbnail"));
   $('#replacement-url').oninput=event=>{if(event.isTrusted)$('#replacement-thumbnail').value='';};
   $("#replacement-back").onclick=mediaDialog;
@@ -133,6 +242,8 @@ function videoDialog(existing=null){
  <label>Actual upload date and time, including timezone<input id="video-date" placeholder="2026-03-11T20:05:04-07:00" value="${esc(previous.uploadDate||'')}"><span class="hint">We try to retrieve this from YouTube. If unavailable, enter the actual publication timestamp.</span></label>
  <label>Start at (seconds)<input id="video-start" type="number" min="0" value="${Number(start)||0}"></label>
  <div class="dialog-actions">${existing?'<button class="secondary" id="video-back">Back</button><button class="quiet" id="remove-video">Remove video</button>':''}<button id="insert-video">${existing?'Update video':'Insert video'}</button></div>`,()=>{
+  attachDescriptionSuggestion($("#video-title"),()=>({kind:"video",url:$("#video-url").value,context:$("#video-title").value+" "+$("#video-description").value}),"title");
+  attachDescriptionSuggestion($("#video-description"),()=>({kind:"video",url:$("#video-url").value,context:$("#video-title").value+" "+$("#video-description").value}),"description");
   if(existing){$("#video-back").onclick=mediaDialog;$("#remove-video").onclick=()=>{removePageMedia(existing);mediaDialog();};}
   $("#video-url").oninput=()=>{schema=null;$("#video-title").value="";$("#video-description").value="";$("#video-date").value="";$("#video-start").value=0;};
   const fetchDetails=async()=>{

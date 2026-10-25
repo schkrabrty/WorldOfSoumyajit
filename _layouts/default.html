@@ -9,15 +9,16 @@
 {% include head.html %}
 </head>
 <body class="is-preload">
+    <a class="skip-link" href="#main">Skip to main content</a>
     <div id="wrapper">
         {% include header.html %}
         {% include menu.html %}
-        <div id="main">
+        <main id="main" tabindex="-1">
             <div class="inner">
 {{ content }}
 {% include sections.html %}
             </div>
-        </div>
+        </main>
         {% include footer.html %}
     </div>
     {% include scripts.html %}

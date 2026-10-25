@@ -81,5 +81,16 @@ class LibraryTests(unittest.TestCase):
             with self.assertRaises(ValueError): self.library.resolve({"keys": [self.prefix + "Private.jpg"]})
         with self.assertRaises(ValueError): self.library.resolve({"keys": ["another-folder/file.jpg"]})
 
+    def test_install_reuses_existing_aws_support_without_running_setup(self):
+        with patch.object(self.library,"executable",return_value="/local/aws"),patch("s3_library.subprocess.run") as setup:
+            self.assertIn("already installed",self.library.install()["message"])
+            setup.assert_not_called()
+
+    def test_install_from_an_incomplete_copy_explains_how_to_open_the_working_manager(self):
+        with patch.object(self.library,"executable",side_effect=ValueError("Missing")),patch("s3_library.subprocess.run") as setup:
+            with self.assertRaisesRegex(ValueError,"Manage Website.command"):
+                self.library.install()
+            setup.assert_not_called()
+
 
 if __name__ == "__main__": unittest.main()

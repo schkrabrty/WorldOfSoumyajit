@@ -23,7 +23,7 @@ class ContentTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory(prefix="website-manager-test-")
         self.root = Path(self.temp.name) / "site"
         self.root.mkdir()
-        for path in SOURCE.glob("*.html"):
+        for path in (SOURCE / "pages").glob("*.html"):
             shutil.copy2(path, self.root / path.name)
         for name in ["_config.yml", ".gitignore"]:
             shutil.copy2(SOURCE / name, self.root / name)
@@ -56,6 +56,31 @@ class ContentTests(unittest.TestCase):
         self.manager.undo({"id": entry["id"]})
         self.assertFalse((self.root / "new-story.html").exists())
         self.assertNotIn("/new-story.html", (self.root / "_data/tiles.json").read_text())
+
+    def test_pages_folder_keeps_stable_ids_and_urls_through_save_delete_undo(self):
+        folder = self.root / "pages";folder.mkdir()
+        for source in self.root.glob("*.html"): source.rename(folder / source.name)
+        self.assertTrue(self.manager.page("about.html")["protected"])
+        self.manager.save(self.payload())
+        self.assertTrue((folder / "new-story.html").is_file())
+        self.assertFalse((self.root / "new-story.html").exists())
+        page = self.manager.page("new-story.html")
+        self.assertEqual(page["url"], "/new-story.html")
+        self.manager.delete({"pages": [{"id":page["id"],"revision":page["revision"],"replacement":""}]})
+        self.assertFalse((folder / "new-story.html").exists())
+        self.manager.undo({"id":self.manager.history()[0]["id"]})
+        self.assertTrue((folder / "new-story.html").is_file())
+
+    def test_accessible_new_content_validation_and_single_main_heading(self):
+        for body in ['<img src="https://example.org/photo.jpg">','<iframe src="https://example.org/video"></iframe>']:
+            payload=self.payload();payload["body"]=body
+            with self.assertRaisesRegex(module.Problem,"Accessibility"):
+                self.manager.save(payload)
+        payload=self.payload();payload["body"]='<h1>Draft heading</h1><p>Story.</p><img src="https://example.org/photo.jpg" alt="">'
+        self.manager.save(payload)
+        body=self.manager.page("new-story.html")["body"]
+        self.assertEqual(body.count('<h1'),1)
+        self.assertIn('<h1>A new story</h1>',body)
 
     def test_rename_updates_old_aliases_and_links(self):
         payload = self.payload("deepaboli-2025.html")
@@ -211,6 +236,20 @@ class ContentTests(unittest.TestCase):
         body = self.manager.page("new-story.html")["body"]
         self.assertIn('href="https://example.com/full.jpg"', body)
         self.assertIn('src="https://example.com/small.jpg"', body)
+
+    def test_gallery_save_removes_empty_editor_links_and_preserves_real_content(self):
+        payload = self.payload()
+        photo = '<a href="https://example.com/full.jpg" data-lightbox="mygallery" data-title="Caption"><img src="https://example.com/small.jpg" alt="A photo"></a>'
+        text_link = '<a href="https://example.com/full.jpg" data-lightbox="mygallery">View photo</a>'
+        named_anchor = '<a id="notes"></a>'
+        payload["body"] = ('<p>বাংলায় গল্প।</p><section class="gallery">'
+                           '<a href="https://example.com/empty.jpg" data-lightbox="mygallery"><br> &nbsp;\u200b<span></span></a>'
+                           + photo + text_link + named_anchor + '</section>')
+        self.manager.save(payload)
+        body = self.manager.page("new-story.html")["body"]
+        self.assertNotIn("empty.jpg", body)
+        for expected in [photo, text_link, named_anchor, "বাংলায় গল্প।"]:
+            self.assertIn(expected, body)
 
     def test_replacing_and_removing_video_updates_its_metadata(self):
         name = "omnidirectional-treadmill-vs-natural-walking.html"

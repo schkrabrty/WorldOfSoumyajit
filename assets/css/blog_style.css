@@ -47,3 +47,90 @@
     width: 100%;
     height: 100%;
   }
+
+/* Gallery controls use the existing Lightbox icons, with visible focus cues. */
+#lightbox .lb-container {
+    position: relative;
+}
+
+#lightbox .lb-loader {
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    margin: 0;
+    transform: translate(-50%, -50%);
+    z-index: 20;
+}
+
+#lightbox .lb-cancel {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    background: transparent url('../images/loading.gif') center / 32px 32px no-repeat;
+    box-shadow: none;
+    cursor: pointer;
+}
+
+#lightbox .lb-close {
+    position: absolute;
+    z-index: 30;
+    top: 10px;
+    right: 10px;
+    display: block;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent url('../images/close.png') center / 24px 24px no-repeat;
+    box-shadow: none;
+    filter: drop-shadow(0 1px 3px black);
+    cursor: pointer;
+}
+
+#lightbox .lb-close:hover {
+    background-color: transparent;
+    opacity: 1;
+}
+
+#lightbox .lb-close:focus-visible,
+#lightbox .lb-nav a:focus-visible {
+    outline: 3px solid white;
+    outline-offset: -3px;
+}
+
+#lightbox .lb-nav a,
+#lightbox .lb-close {
+    opacity: 0;
+    filter: drop-shadow(0 1px 3px black);
+    transition: opacity 180ms ease;
+}
+
+#lightbox .lb-nav .lb-prev {
+    background-position: 12px 50%;
+}
+
+#lightbox .lb-nav .lb-next {
+    background-position: calc(100% - 12px) 50%;
+}
+
+#lightbox.lb-show-navigation .lb-nav a,
+#lightbox.lb-show-navigation .lb-close,
+#lightbox .lb-outerContainer:hover .lb-nav a,
+#lightbox .lb-outerContainer:hover .lb-close,
+#lightbox .lb-outerContainer:focus-within .lb-nav a,
+#lightbox .lb-outerContainer:focus-within .lb-close {
+    opacity: 1;
+}
+
+@media (hover: none) {
+    #lightbox .lb-nav a,
+    #lightbox .lb-close { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #lightbox .lb-nav a,
+    #lightbox .lb-close { transition: none; }
+}

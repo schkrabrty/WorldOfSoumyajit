@@ -17,6 +17,7 @@ import threading
 from urllib.parse import quote, unquote, unquote_plus, urlsplit
 from urllib.request import Request, urlopen
 import xml.etree.ElementTree as ET
+from site_documents import page_sources
 
 DEFAULTS = {"bucket": "worldofsoumyajit", "region": "us-east-1", "prefix": "My Website related Stuffs/", "profile": "worldofsoumyajit"}
 KINDS = {"image": {".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif", ".svg"}, "pdf": {".pdf"},
@@ -91,7 +92,7 @@ def collect_references(root, live=False, bucket=DEFAULTS["bucket"]):
         if not source.endswith((".js", ".css")) and "<" in text:
             Links(source).feed(text)
 
-    paths = list(root.glob("*.html")) + [root / "_config.yml"]
+    paths = page_sources(root) + [root / "_config.yml"]
     for directory in ["_data", "_includes", "_layouts", "assets/css", "assets/js"]:
         paths.extend(path for path in (root / directory).rglob("*") if path.is_file() and path.suffix.lower() in {".html", ".json", ".yml", ".css", ".js"})
     for path in paths:
@@ -200,7 +201,16 @@ class S3Library:
         return {"message": "The AWS sign-in page is opening. Sign in and approve MFA there, then refresh the file list."}
 
     def install(self):
-        result = subprocess.run(["/bin/bash", str(self.root / "scripts/setup_aws.sh")], cwd=self.root,
+        try:
+            self.executable()
+        except ValueError:
+            pass
+        else:
+            return {"message": "AWS support is already installed. Choose Connect AWS to sign in."}
+        setup = self.root / "scripts/setup_aws.sh"
+        if not setup.is_file():
+            raise ValueError("This manager is using an incomplete project copy. Open Manage Website.command in your working website project to continue.")
+        result = subprocess.run(["/bin/bash", str(setup)], cwd=self.root,
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=600)
         if result.returncode: raise ValueError("AWS setup did not finish:\n" + result.stdout[-2500:])
         return {"message": "AWS support is installed. Choose Connect AWS to sign in."}
@@ -215,7 +225,7 @@ class S3Library:
         return result.get("Contents", [])
 
     def references(self, bucket):
-        paths = list(self.root.glob("*.html")) + [self.root / "_config.yml"]
+        paths = page_sources(self.root) + [self.root / "_config.yml"]
         paths += [path for path in (self.root / "_data").glob("*") if path.is_file()]
         stamp = (bucket, tuple(sorted((str(path), path.stat().st_mtime_ns, path.stat().st_size) for path in paths)))
         with self.reference_lock:

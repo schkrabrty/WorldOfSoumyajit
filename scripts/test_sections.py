@@ -21,7 +21,7 @@ class SectionTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="section-manager-test-")
         self.root = Path(self.temp.name)
-        for path in SOURCE.glob("*.html"): shutil.copy2(path, self.root / path.name)
+        for path in (SOURCE / "pages").glob("*.html"): shutil.copy2(path, self.root / path.name)
         for name in ["_config.yml", ".gitignore"]: shutil.copy2(SOURCE / name, self.root / name)
         shutil.copytree(SOURCE / "_data", self.root / "_data")
         self.manager = SiteManager(self.root, "http://127.0.0.1:4111")

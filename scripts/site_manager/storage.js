@@ -43,9 +43,9 @@ function attachS3Field(input,kind="image"){
 
 async function s3Picker({kind="image",multiple=false,prefix,onSelect,prepareImages=kind==='image'}){
  let picker=$("#s3-picker");
- if(!picker){picker=document.createElement("dialog");picker.id="s3-picker";document.body.append(picker);}
+ if(!picker){picker=document.createElement("dialog");picker.id="s3-picker";picker.setAttribute("aria-labelledby","s3-picker-title");document.body.append(picker);}
  let chosen=new Map(),files=[],folder=prefix||defaultS3Folder(kind),root=state.storage?.prefix||"My Website related Stuffs/",next=null;
- picker.innerHTML=`<div class="dialog-heading"><h2>Choose ${kind==='image'?'pictures':kind==='pdf'?'PDF files':'files'} from S3</h2><button class="icon-button" id="s3-close" aria-label="Close S3 picker">×</button></div>
+ picker.innerHTML=`<div class="dialog-heading"><h2 id="s3-picker-title">Choose ${kind==='image'?'pictures':kind==='pdf'?'PDF files':'files'} from S3</h2><button class="icon-button" id="s3-close" aria-label="Close S3 picker">×</button></div>
  <div class="s3-location"><button class="secondary" id="s3-home">Website folder</button><button class="secondary" id="s3-up">Up one folder</button><button class="quiet" id="s3-refresh">Refresh</button></div>
  <p class="hint" id="s3-path"></p><input id="s3-search" type="search" placeholder="Search the files in this folder" aria-label="Search S3 files">
  ${prepareImages?'<p class="hint">Smaller tile images are prepared automatically when you choose pictures. Clicking a gallery picture opens its original.</p>':''}
@@ -104,14 +104,13 @@ async function s3Picker({kind="image",multiple=false,prefix,onSelect,prepareImag
  await load(folder);
 }
 
-function renderStorage(){
+function storageSettingsPanel(){
  const settings=state.storage||{};
- main.innerHTML=heading("Your S3 files","Browse the bucket by folder and file type, then choose files for your pages.")+
- `<section class="card"><h2>Connection</h2><p class="hint">Sign in through AWS when prompted. Passwords and MFA stay in the AWS sign-in page.</p><form id="storage-settings"><div class="two-col"><label>Bucket${field('bucket',settings.bucket)}</label><label>AWS region${field('region',settings.region)}</label><label>Website folder${field('prefix',settings.prefix)}</label><label>AWS profile${field('profile',settings.profile)}</label></div><div class="inline-actions"><button>Save connection settings</button><button type="button" class="secondary" id="storage-connect">Connect AWS</button></div></form><p class="hint">${settings.available?'AWS CLI is ready on this computer.':'First run bash scripts/setup_aws.sh in this project to install AWS support.'}</p></section>
- <section class="card"><h2>Photo thumbnails</h2><p>When you choose S3 pictures for a page, the manager creates missing smaller versions and uploads them to S3. Tiles use the smaller pictures; the image viewer opens the originals.</p><p class="hint">Existing thumbnails are reused. Photo support is set up automatically on first use. ${settings.thumbnails_ready?'Photo support is ready.':''}</p></section>
- <section class="card"><h2>Browse your files</h2><label>File type<select id="storage-kind">${options({image:'Pictures',pdf:'PDF documents',video:'Video files',audio:'Audio files',archive:'Archives and project packages',all:'All files'},'image')}</select></label><button id="storage-browse">Browse S3 folders</button><div id="storage-selection"></div><p class="hint">Browsing here does not create thumbnails. Removing a picture or deleting a page in the manager does not delete the original S3 objects.</p></section>`;
- $("#storage-settings").onsubmit=event=>{event.preventDefault();action(event.currentTarget.querySelector('button'),async()=>{const result=await api('s3/configure',Object.fromEntries(new FormData(event.currentTarget)));message(result.message);await refresh();});};
- if(!settings.available){const button=document.createElement('button');button.type='button';button.className='secondary';button.textContent='Install AWS support';button.onclick=()=>action(button,async()=>{button.textContent='Installing AWS support…';try{message((await api('s3/install',{})).message);await refresh();renderStorage();}finally{button.textContent='Install AWS support';}});$("#storage-connect").before(button);}
- $("#storage-connect").onclick=event=>action(event.currentTarget,async()=>message((await api('s3/connect',{})).message));
- $("#storage-browse").onclick=()=>s3Picker({kind:$("#storage-kind").value,prepareImages:false,multiple:true,prefix:state.storage.prefix,onSelect:files=>{$("#storage-selection").innerHTML='<div class="file-list">'+files.map(file=>`<a href="${esc(file.url)}" target="_blank" rel="noopener noreferrer">${esc(file.name)}</a><br><span>${esc(file.url)}</span>`).join('<br><br>')+'</div>';}});
+ return `<details class="card" id="storage-settings-panel"><summary>S3 connection</summary><p class="hint">Choose files from S3 while adding or editing page media. Manage the connection here; sign-in and MFA happen on AWS’s page.</p><form id="storage-settings"><div class="two-col"><label>Bucket${field('bucket',settings.bucket)}</label><label>AWS region${field('region',settings.region)}</label><label>Website folder${field('prefix',settings.prefix)}</label><label>AWS profile${field('profile',settings.profile)}</label></div><div class="inline-actions"><button type="submit" id="storage-save">Save connection settings</button><button type="button" class="secondary" id="storage-connect">Connect AWS</button>${!settings.available?'<button type="button" class="secondary" id="storage-install">Install AWS support</button>':''}</div></form><p class="hint">${settings.available?'AWS CLI is ready on this computer.':'Install AWS support to browse files in your bucket.'} ${settings.thumbnails_ready?'Photo thumbnail support is ready.':'Photo thumbnail support is set up automatically when needed.'}</p></details>`;
+}
+function bindStorageSettings(){
+ const redraw=()=>{const panel=$('#storage-settings-panel'),open=panel.open;panel.outerHTML=storageSettingsPanel();$('#storage-settings-panel').open=open;bindStorageSettings();};
+ $('#storage-settings').onsubmit=event=>{event.preventDefault();const values=Object.fromEntries(new FormData(event.currentTarget));action($('#storage-save'),async()=>{const result=await api('s3/configure',values);message(result.message);await refresh();redraw();});};
+ $('#storage-connect').onclick=event=>action(event.currentTarget,async()=>message((await api('s3/connect',{})).message));
+ const install=$('#storage-install');if(install)install.onclick=()=>action(install,async()=>{install.textContent='Installing AWS support…';try{message((await api('s3/install',{})).message);await refresh();redraw();}finally{install.textContent='Install AWS support';}});
 }

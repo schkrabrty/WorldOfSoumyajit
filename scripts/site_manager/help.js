@@ -32,17 +32,18 @@ const idHelp={
  'html-toggle':'Switch between the visual editor and the page’s HTML. Heading tags and embedded content are preserved.',
  'save-page':'Save this page and its tile locally, then build the preview. Publish separately when you are ready.',
  'cancel-edit':'Return to the page list. Unsaved changes can be discarded.',
- 'new-page':'Create a new page. Its tile starts at position 1 in the section you choose.',
+ 'new-page':'Choose a main page for the website menu or a detail page linked from a tile.',
+ 'new-page-kind':'Main pages appear in the website menu and contain tile sections. Detail pages hold the content linked from those tiles.',
+ 'continue-new-page':'Continue with the selected kind of page.',
+ 'edit-main-page':'Edit the selected main page’s writing and media.',
  'section-page':'Choose the main page whose sections you want to manage.',
  'section-navigation':'Show a row of links that jump to each section on this main page.',
  'add-section':'Create a section on the selected main page. New sections are placed first.',
  'reload-sections':'Reload the latest sections and tile counts, including changes made in another window.',
- 'arrange-group':'Choose a section, move its tiles with the arrows, then save the tile order.',
+ 'arrange-group':'Choose a section, drag its tiles or use the arrows, then save the tile order.',
  'save-order':'Save the order of tiles inside this section and rebuild the preview.',
  'storage-connect':'Open AWS sign-in. Complete passwords and MFA on AWS’s page.',
  's3-connect':'Open AWS sign-in. After signing in, refresh the S3 file list.',
- 'storage-browse':'Browse existing S3 files. Browsing alone does not create thumbnails.',
- 'storage-kind':'Show only files of the selected kind.',
  's3-search':'Filter the files currently loaded in this S3 folder.',
  's3-refresh':'Reload the current S3 folder.',
  's3-up':'Open the parent folder.',
@@ -80,15 +81,21 @@ const idHelp={
  search:'Find a page by its title or web address.',filter:'Show pages in a selected category.',
  'dialog-close':'Close this dialog.', 's3-close':'Close the S3 picker.'
 };
-const viewHelp={pages:'Create and edit pages.',sections:'Add, edit, reorder, and remove sections on main pages.',arrange:'Reorder tiles within a section.',people:'Maintain shared names and profile links.',storage:'Browse S3 files and manage your AWS connection.',settings:'Edit shared contact details, photos, CVs, and social links.',history:'Review saved changes and undo the latest operation.',publish:'Validate and publish local website changes.'};
-const toolHelp={photos:'Insert pictures or a gallery into your writing.',video:'Add a YouTube video.',media:'Edit, replace, or remove pictures and videos already in this page.',link:'Insert a clickable link.',person:'Insert a person’s name with their shared profile link.',document:'Insert a link to a PDF.'};
+const viewHelp={pages:'Create and edit pages.',sections:'Add or delete main pages, and manage their tile sections.',arrange:'Drag tiles or use their arrows to reorder them within a section.',people:'Maintain shared names and profile links.',settings:'Edit shared contact details, photos, CVs, social links, and the S3 connection.',history:'Review saved changes and undo the latest operation.',publish:'Validate and publish local website changes.'};
+const toolHelp={photos:'Add pictures, choose their order by dragging or using the arrows, then insert the gallery.',video:'Add a YouTube video.',media:'Drag pictures and videos into order, or edit, replace, and remove them. Save the page afterward.',link:'Insert a clickable link.',person:'Insert a person’s name with their shared profile link.',document:'Insert a link to a PDF.'};
 
 function controlHelp(control){
+ if(control.matches('#main-page-form [name="title"]'))return 'The title used for the new page, its heading, and its website menu link.';
+ if(control.matches('#main-page-form [name="section_title"]'))return 'The first group of tiles on this main page. Add or edit more sections after creating the page.';
+ if(control.matches('[data-replacement]'))return 'Existing links will use this replacement. A main page needs another main page that is not selected for deletion.';
+ if(control.matches('[data-delete-tiles]'))return 'Move the main page’s sections and tiles to its replacement, or remove them while keeping linked pages and image files.';
+ if(control.matches('[data-select]'))return 'Select this main or detail page for the shared Delete selected action.';
  if(control.matches('#section-form [name="title"]'))return 'The name of this tile section. Renaming it keeps its existing links and tiles.';
  if(control.matches('[data-section-move]'))return 'Move this whole section earlier or later on its main page. The change saves immediately.';
  if(control.matches('[data-section-edit]'))return 'Rename this section or change whether its heading is shown.';
  if(control.matches('[data-section-delete]'))return 'Remove this section and choose what happens to its tiles. The linked pages are kept.';
- if(control.matches('[data-move]'))return 'Move this tile earlier or later. Choose Save tile order to apply the changes.';
+ if(control.matches('#sort-list [data-order-direction]'))return 'Move this tile earlier or later. Choose Save tile order to apply the changes.';
+ if(control.matches('[data-order-direction]'))return 'Move this picture or video earlier or later. Save the page to keep the new order.';
  if(control.matches('[data-undo]'))return 'Undo the latest saved operation using its local backup.';
  if(control.matches('[data-replace-media]'))return 'Edit this picture or video, or choose a replacement.';
  if(control.matches('[data-remove-media]'))return 'Remove this item from the page content. Its original file is kept.';

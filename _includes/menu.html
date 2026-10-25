@@ -1,8 +1,8 @@
-<nav id="menu" aria-label="Menu">
-    <h2>Menu</h2>
+<div id="menu" role="dialog" aria-modal="true" aria-labelledby="menu-title" aria-hidden="true" inert>
+    <h2 id="menu-title">Menu</h2>
     <ul>
 {% for item in site.data.navigation %}
         <li><a href="{{ item.url | relative_url }}">{{ item.label | escape }}</a></li>
 {% endfor %}
     </ul>
-</nav>
+</div>

@@ -7,7 +7,7 @@
 {% assign favicon_url = site.profile_image | append: favicon_separator | append: 'favicon=' | append: favicon_version %}
     <title>{{ page_title | escape }}</title>
     <meta charset="utf-8" />
-    <meta name="viewport" content="{{ page.viewport | default: 'width=device-width, initial-scale=1, user-scalable=no' | escape }}" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="icon" href="{{ favicon_url | escape }}" />
 {% if page.description %}
     <meta name="description" content="{{ page.description | escape }}" />
@@ -28,9 +28,11 @@
 {% unless page.assets == false %}
     <link rel="stylesheet" href="{{ '/assets/css/main.css' | relative_url }}?v={{ site.asset_versions.main_css }}" />
     <link rel="stylesheet" href="{{ '/assets/css/blog_style.css' | relative_url }}?v={{ site.asset_versions.blog_css }}" />
+    <link rel="stylesheet" href="{{ '/assets/css/accessibility.css' | relative_url }}?v={{ site.asset_versions.accessibility_css }}" />
 {% unless page.lightbox == false %}
     <link rel="stylesheet" href="{{ '/assets/css/lightbox.min.css' | relative_url }}" />
-    <script src="{{ '/assets/js/lightbox-plus-jquery.min.js' | relative_url }}"></script>
+    <script src="{{ '/assets/js/lightbox-plus-jquery.min.js' | relative_url }}?v={{ site.asset_versions.lightbox_js }}"></script>
+    <script>lightbox.option({disableScrolling: true, preloadNeighbors: false, imageCacheSize: 24, fadeDuration: 120, imageFadeDuration: 120, resizeDuration: 120});</script>
 {% endunless %}
 {% unless page.noscript == false %}
     <noscript><link rel="stylesheet" href="{{ '/assets/css/noscript.css' | relative_url }}" /></noscript>

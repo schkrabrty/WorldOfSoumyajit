@@ -35,7 +35,7 @@ My website address: https://worldofsoumyajit.com
 Maintaining this site
 ---------------------
 
-The site is built with Jekyll. Root .html files contain page metadata between
+The site is built with Jekyll. The .html files in pages/ contain page metadata between
 --- lines followed by each page's own HTML content. Shared layouts and includes
 supply the surrounding document, header, menu, footer, styles, and scripts.
 Existing .html addresses are retained through each page's permalink setting.
@@ -55,7 +55,10 @@ use; no CMS account is required. To launch it from a terminal:
 
     bash "Manage Website.command"
 
-- Pages: choose New page, select its type, and fill in the title, description,
+- Pages: choose New page and select Main page or Detail page. Main pages appear
+  in the website menu; detail pages are linked from tiles. Both use the same
+  Edit buttons and writing/media editor. For a detail page, select its type and
+  fill in the title, description,
   writing, and tile details. Research, tutorials, student showcases, photography,
   creative work, and general pages are supported. Choose an existing page to
   edit it. The visual editor supports links, linked people, photo galleries,
@@ -88,7 +91,13 @@ use; no CMS account is required. To launch it from a terminal:
   new or changed page tile images use the same preparation. Existing page tiles
   are left alone when saving unrelated text edits.
 - Manage media: inside the page editor, choose Manage media to see its existing
-  pictures and videos. Replace / edit lets you upload a replacement photo or
+  pictures and videos. Drag a row into your preferred order, or use its up/down
+  arrows. This works on both new and existing pages, and retains each picture's
+  caption, thumbnail, and full-size link. Add photos also lets you arrange the
+  selected pictures before inserting the gallery. Hold a dragged picture near
+  the top or bottom of the photo list to scroll continuously in that direction.
+  Replace / edit lets you
+  upload a replacement photo or
   change its URL, caption, and image description. You may also apply that photo
   to the tile and sharing image. For videos, replace the YouTube URL or update
   its title, description, publication timestamp, and starting time. Remove
@@ -98,9 +107,30 @@ use; no CMS account is required. To launch it from a terminal:
 - Videos: paste a YouTube URL and choose Get video details. The manager attempts
   to retrieve the actual publication timestamp. If it cannot, supply the real
   upload datetime with its timezone before inserting the video.
-- Arrange tiles: choose a section, move tiles earlier or later, and save.
+- Full-size galleries: the shared viewer loads photos when you open them and
+  retains the 24 most recently viewed photos during the current page visit.
+  Returning to one of these photos reuses its loaded image without another
+  request or the loading animation. Closing and reopening the viewer keeps
+  these photos available; refreshing the page resets this memory cache.
+  Unvisited neighbors are not preloaded. A first view still needs the network.
+  Arrows appear briefly when a photo opens and return on hover or focus;
+  touchscreens keep them visible. The close cross at the image's top-right
+  appears and fades with the arrows. The loading spinner stays centered in
+  the image area while a new photo loads.
+- Arrange tiles: choose a section and drag tiles into order with the mouse,
+  or use the arrows. Hold a tile near the top or bottom of the list to scroll.
+  Choose Save tile order to apply the new arrangement.
   Existing custom image crops, overlays, and awards are retained.
-- Sections: choose My Works, My Photography, My Creativity, or About Me, then
+- Main pages & sections: choose New page, then Main page, to create a page with
+  a menu link and initial section. Edit its content from Edit page.
+  In Pages, select its checkbox and choose Delete selected to remove it and
+  its menu link. Choose a
+  replacement for existing links and back links, then move its sections and
+  tiles there or remove those tiles while keeping their linked pages and files.
+  Old addresses redirect to the replacement. Undo restores the complete change
+  from Recent changes. The homepage remains required. Main-page addresses stay
+  fixed after creation; choose a clear address when creating one.
+- Sections: choose a main page, then
   add a section, edit its title, show or hide its heading, or move it with the
   arrows. Each move saves immediately and updates the preview. New sections
   appear first. Enable Show section links above the tiles to add jump links.
@@ -115,15 +145,18 @@ use; no CMS account is required. To launch it from a terminal:
 - People & profile links: add or update collaborators' names, profile URLs, and
   aliases. Use Add person in the page editor to insert a shared linked name.
 - Shared settings: change the default photo/favicon, email, CV URLs, and social
-  profiles. These settings apply throughout the website.
-- S3 files: browse bucket folders and filter by pictures, PDFs, videos, audio,
-  archives, or all files. Choose from S3 buttons also appear beside page images,
+  profiles. These settings apply throughout the website. Expand S3 connection
+  to configure the bucket, region, folder, and AWS profile or connect to AWS.
+- S3 selection: browse bucket folders from Choose from S3 beside page images,
   tile images, replacement-photo URLs, profile photos, and CV links. The PDF
   dialog can select an existing S3 PDF. Public access is checked before a link
   is inserted. The image picker starts in WorkImages, BlogImages, or
   CreativityImages according to the page section; PDF selection starts in Resume.
-- Delete pages: select one or several detail pages in Pages. You may choose a
-  replacement page for each deleted address. Main index pages are protected.
+- Delete pages: select main pages, detail pages, or a mixture using the same
+  checkboxes in Pages, then choose Delete selected. Main pages require a
+  remaining main page as their replacement and a choice to move or remove
+  sections and tiles. Detail pages have an optional replacement. One Undo
+  restores the complete selection. The homepage is required and has no checkbox.
   If another page still links to a deleted page, a replacement or a link edit is
   required. With no replacement, a removed address correctly returns not found.
 - Recent changes: undo the most recent saved operation. Local backups are kept
@@ -161,7 +194,8 @@ rendered sections, headings, and jump links match the configured order.
 S3 connection and one-time cleanup
 ----------------------------------
 
-In S3 files, enter the bucket, AWS region, website folder, and local AWS profile.
+In Shared settings > S3 connection, enter the bucket, AWS region, website folder,
+and local AWS profile.
 The defaults are worldofsoumyajit, us-east-1, My Website related Stuffs/, and
 worldofsoumyajit. Choose Connect AWS and complete sign-in/MFA directly on AWS's
 browser page. This uses aws login with temporary credentials; no console
@@ -330,6 +364,17 @@ operations in temporary copies (including a temporary local Git remote):
 
     python3 -m unittest discover -s scripts -p 'test_*.py'
 
+To test mouse drag-and-drop ordering, gallery insertion, and empty-link cleanup
+in an isolated DOM without writing website pages:
+
+    npm install --prefix .site-manager/ui-tests jsdom
+    node --test scripts/test_manager_media.cjs scripts/test_gallery_viewer.cjs
+
+To exercise main-page creation, deletion, and undo through the manager forms
+and API against a disposable website copy:
+
+    node --test scripts/test_main_page_controls.cjs
+
 The GitHub Pages workflow builds and validates the site before uploading it
 for deployment.
 
@@ -337,7 +382,7 @@ Adding a page
 Use New page in the dashboard for routine additions. It handles the page, tile,
 and related metadata together. To create a source file manually instead:
 
-Create a root .html file with metadata such as:
+Create pages/my-new-page.html with metadata such as:
 
     ---
     title: "My new page"
@@ -369,3 +414,67 @@ a page, and point them straight to the current page to avoid redirect chains.
 Shared templates, configuration, plugins, and development scripts are excluded
 from the published output. The Google
 verification file is published unchanged, and robots.txt declares the sitemap.
+
+Page source organization and accessibility
+------------------------------------------
+Editable page sources live in pages/, including the homepage, main pages, detail
+pages, and special 404/elements pages. Each keeps an explicit permalink, so a
+source such as pages/about.html still publishes at /about.html. New pages are
+saved in this folder. The manager keeps stable page IDs for editing, deleting,
+and undoing older operations. Shared templates stay in _layouts and _includes.
+The raw Google verification file remains at the repository root so its required
+public verification endpoint and exact contents remain unchanged.
+
+Every shared page inherits a main landmark, skip link, zoom support, visible
+keyboard focus, modal menu behavior, and reduced-motion settings. The gallery
+traps focus while open, keeps background content inert, and restores the
+triggering thumbnail without scrolling. Newly inserted media has descriptions
+and video titles. Saving and production validation reject missing image alt
+attributes and untitled frames; alt="" is allowed for decorative images.
+
+Automated checks do not establish full WCAG compliance. Review description
+accuracy, keyboard operation, zoom/reflow, screen-reader announcements, video
+captions/transcripts, and the internal accessibility of linked PDFs separately.
+To run structural axe checks after building:
+
+    npm install --prefix .site-manager/ui-tests jsdom axe-core terser
+    node scripts/check_accessibility.cjs _site
+
+The static DOM audit omits color contrast and rendered geometry; these require
+separate checks. Its report is saved in .site-manager/accessibility-review.json.
+
+OpenAI writing and media suggestions
+-------------------------------------
+Start the manager with the existing OPENAI_API_KEY in its environment. The key
+stays on the local Python server; it is never included in browser code, website
+files, drafts, or API errors. No new key is created or persisted by this feature.
+OPENAI_DESCRIPTION_MODEL optionally changes the default gpt-5.4-mini model.
+
+Writing suggestions are available beside their fields when creating or editing
+pages and media. Cached drafts are kept privately in
+.site-manager/media-descriptions. There is no separate suggestions or S3 files
+tab; use page/media fields to suggest wording or choose files.
+Existing authored titles/captions are supplied as style examples with each
+request. This is request context, not model training or permanent learning.
+
+In New Page and Edit, use Suggest with OpenAI beside page titles, headings,
+summaries, tile titles/captions, photo captions/alt text, video titles/descriptions,
+and PDF link text. Cached drafts appear for existing items. Edit the suggestion,
+choose Use this suggestion, then save the page to apply it. Generating alone
+never changes or publishes authored content. Generate another suggestion when
+an item changes or you want a different draft. Profile alt text and shared CV
+link text are editable in Shared settings with the same suggestion controls.
+
+Images are inspected visually. PDFs are read from their actual pages and text
+where publicly readable. Video suggestions use the YouTube thumbnail and the
+supplied title/description; the full video and audio are not analyzed. They do
+not generate timed subtitles. Page suggestions use supplied page writing.
+Unknown identities, locations, and dates must be checked by the author. Some
+external hosts block automated PDF access; choose an accessible URL or upload
+the PDF locally to generate a suggestion. Descriptions do not repair PDF tags,
+reading order, or inaccessible document contents.
+
+Only an explicit generation action sends the selected media/page context and
+site style examples to OpenAI; normal page viewing and saving work without API
+access. Cached drafts remain reviewable if the API is unavailable. Nothing is
+sent to OpenAI from the public website. Normal API usage charges apply.

@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/__manager/style.css">
   <script src="/__manager/app.js" defer></script>
   <script src="/__manager/media.js" defer></script>
+  <script src="/__manager/descriptions.js" defer></script>
   <script src="/__manager/storage.js" defer></script>
   <script src="/__manager/sections.js" defer></script>
   <script src="/__manager/help.js" defer></script>
@@ -17,10 +18,9 @@
     <div class="brand"><span class="brand-icon">S</span><div><strong>Your website</strong><small>World of Soumyajit</small></div></div>
     <nav aria-label="Website manager">
       <button data-view="pages" class="active">Pages</button>
-      <button data-view="sections">Sections</button>
+      <button data-view="sections">Main pages &amp; sections</button>
       <button data-view="arrange">Arrange tiles</button>
       <button data-view="people">People &amp; profile links</button>
-      <button data-view="storage">S3 files</button>
       <button data-view="settings">Shared settings</button>
       <button data-view="history">Recent changes</button>
       <button data-view="publish">Review &amp; publish</button>
@@ -32,6 +32,6 @@
     <div id="notice" role="status" hidden></div>
     <main id="main"><p>Loading your pages…</p></main>
   </div>
-  <dialog id="dialog"><div class="dialog-heading"><h2 id="dialog-title"></h2><button id="dialog-close" class="icon-button" aria-label="Close dialog">×</button></div><div id="dialog-content"></div></dialog>
+  <dialog id="dialog" aria-labelledby="dialog-title"><div class="dialog-heading"><h2 id="dialog-title"></h2><button id="dialog-close" class="icon-button" aria-label="Close dialog">×</button></div><div id="dialog-content"></div></dialog>
 </body>
 </html>

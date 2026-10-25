@@ -14,13 +14,33 @@ MAIN_PAGES = {
 RESERVED_IDS = {"header", "menu", "main", "footer", "wrapper"}
 
 
+def main_pages(catalog):
+    """Read the main-page registry, with defaults for the original site pages."""
+    defaults = {details["url"]: details for details in MAIN_PAGES.values()}
+    return {"index.html" if url == "/" else url.lstrip("/"): {
+        "url": url, "title": settings.get("title", defaults.get(url, {}).get("title")),
+        "category": settings.get("category", defaults.get(url, {}).get("category"))}
+        for url, settings in catalog.items()}
+
+
 def validate_sections(catalog, tiles):
-    if not isinstance(catalog, dict) or set(catalog) != {page["url"] for page in MAIN_PAGES.values()}:
-        raise ValueError("The section list must contain each main page.")
+    if not isinstance(catalog, dict) or "/" not in catalog:
+        raise ValueError("The main-page list must include the homepage.")
+    categories = set()
     used = set()
-    for settings in catalog.values():
+    for url, settings in catalog.items():
+        if url != "/" and (not re.fullmatch(r"/[a-z0-9]+(?:-[a-z0-9]+)*\.html", url) or url in {"/index.html", "/404.html", "/elements.html"}):
+            raise ValueError("Main pages need a valid local page address.")
         if not isinstance(settings, dict) or not isinstance(settings.get("navigation"), bool) or not isinstance(settings.get("sections"), list):
             raise ValueError("Each main page needs a section list and navigation setting.")
+    for page in main_pages(catalog).values():
+        if not isinstance(page["title"], str) or not page["title"].strip() or len(page["title"]) > 120:
+            raise ValueError("Each main page needs a title between 1 and 120 characters.")
+        category = page["category"]
+        if not isinstance(category, str) or not re.fullmatch(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*", category) or category in categories or category == "main":
+            raise ValueError("Main-page categories must be valid and unique.")
+        categories.add(category)
+    for settings in catalog.values():
         anchors = set(RESERVED_IDS)
         for section in settings["sections"]:
             if not isinstance(section, dict): raise ValueError("Each section needs a title and an ID.")
