@@ -51,5 +51,5 @@ exclude:
 - scripts
 - vendor
 cv_labels:
-  two_page: Two Page CV of Soumyajit Chakraborty
-  full: Full CV of Soumyajit Chakraborty
+  two_page: Two Page CV
+  full: Full CV
