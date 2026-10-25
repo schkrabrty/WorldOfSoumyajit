@@ -12,16 +12,26 @@ function sourceURL(image){return image.dataset.sourceUrl||image.getAttribute("sr
 function mediaChanged(){bodyDirty=true;contentDirty=true;}
 function mediaURL(value){return /^https?:\/\//.test(value)||value.startsWith("/assets/");}
 
-let mediaObserver=null;
 function bindMediaControls(editor){
- if(mediaObserver)mediaObserver.disconnect();
- const update=()=>{
-  const photos=editor.querySelectorAll('img').length,clips=editor.querySelectorAll('iframe').length;
-  const count=$("#page-media-count");
-  if(count)count.textContent=`This page contains ${photos} picture${photos===1?'':'s'} and ${clips} video${clips===1?'':'s'}.`;
+ const heading=$('#heading-level');
+ const updateHeading=()=>{
+  const selection=getSelection();
+  if(!selection?.anchorNode||!editor.contains(selection.anchorNode))return;
+  const node=selection.anchorNode.nodeType===Node.ELEMENT_NODE?selection.anchorNode:selection.anchorNode.parentElement;
+  const tag=node.closest('h1,h2,h3,h4,p,li,div')?.tagName.toLowerCase();
+  heading.value=['h1','h2','h3','h4'].includes(tag)?tag:'p';
  };
- mediaObserver=new MutationObserver(update);
- mediaObserver.observe(editor,{childList:true,subtree:true});update();
+ heading.onmousedown=rememberSelection;
+ heading.onfocus=rememberSelection;
+ heading.onchange=()=>{
+  const tag=heading.value;if(!['p','h2','h3','h4'].includes(tag))return;
+  editor.focus();const selection=getSelection();
+  if(savedRange&&editor.contains(savedRange.commonAncestorContainer)){selection.removeAllRanges();selection.addRange(savedRange);}
+  else{const range=document.createRange();range.selectNodeContents(editor);range.collapse(false);selection.removeAllRanges();selection.addRange(range);}
+  document.execCommand('formatBlock',false,tag);rememberSelection();mediaChanged();updateHeading();
+ };
+ editor.addEventListener('keyup',updateHeading);
+ editor.addEventListener('mouseup',updateHeading);
  editor.addEventListener('click',event=>{
   const image=event.target.closest?.('img');
   if(image&&editor.contains(image)){event.preventDefault();photoEditDialog(image);}
@@ -72,12 +82,13 @@ function photoEditDialog(image){
  showDialog("Replace or edit picture",`<p class="muted">Choose a new picture or update the current picture’s caption and description.</p>
  <label>Upload a replacement<input type="file" id="replacement-photo" accept="image/*"></label>
  <label>Full-size image URL<input id="replacement-url" value="${esc(originalFull)}"></label>
- <label>Small image URL (optional)<input id="replacement-thumbnail" value="${esc(originalSource===originalFull?'':originalSource)}"><span class="hint">Leave blank to display the same image in the gallery and image viewer.</span></label>
+ <label>Small image URL (optional)<input id="replacement-thumbnail" value="${esc(originalSource===originalFull?'':originalSource)}"><span class="hint">S3 pictures get a thumbnail automatically. Other images use the full-size file when blank.</span></label>
  <label>Caption<input id="replacement-caption" value="${esc(originalCaption)}"></label>
  <label>Image description<input id="replacement-alt" value="${esc(image.getAttribute("alt")||originalCaption)}"></label>
  <label class="check-label"><input type="checkbox" id="replacement-use-tile" ${matchingTile||matchingSharing?'checked':''}>Also use this picture for the page tile and sharing image</label>
  <div class="dialog-actions"><button class="secondary" id="replacement-back">Back</button><button class="quiet" id="remove-picture">Remove picture</button><button id="apply-photo">Update picture</button></div>`,()=>{
   attachS3Field($("#replacement-url"));attachS3Field($("#replacement-thumbnail"));
+  $('#replacement-url').oninput=event=>{if(event.isTrusted)$('#replacement-thumbnail').value='';};
   $("#replacement-back").onclick=mediaDialog;
   $("#remove-picture").onclick=()=>{removePageMedia(image);mediaDialog();};
   $("#replacement-photo").onchange=async event=>{
@@ -85,18 +96,22 @@ function photoEditDialog(image){
    try{const file=event.target.files[0];if(!file)return;const item=await upload(file);$("#replacement-url").value=item.url;$("#replacement-thumbnail").value="";}
    catch(error){dialogError(error);}finally{button.disabled=false;}
   };
-  $("#apply-photo").onclick=()=>{
-   const full=$("#replacement-url").value.trim(),thumbnail=$("#replacement-thumbnail").value.trim()||full;
-   const caption=$("#replacement-caption").value,alt=$("#replacement-alt").value||caption;
-   if(!mediaURL(full)||!mediaURL(thumbnail))return dialogError("Use complete image URLs or upload a replacement picture.");
-   image.setAttribute("src",pending.has(thumbnail)?"/__uploads/"+pending.get(thumbnail):thumbnail);
-   if(pending.has(thumbnail))image.dataset.sourceUrl=thumbnail;else image.removeAttribute("data-source-url");
-   image.setAttribute("alt",alt);
-   if(anchor){anchor.setAttribute("href",full);anchor.setAttribute("data-title",caption);}
-   else if(figureCaption)figureCaption.textContent=caption;
-   else if(caption)image.setAttribute("title",caption);else image.removeAttribute("title");
-   if($("#replacement-use-tile").checked){form.elements.tile_image.value=thumbnail;form.elements.tile_alt.value=alt;form.elements.image.value=full;}
-   mediaChanged();mediaDialog();
+  $("#apply-photo").onclick=async event=>{
+   const row={url:$("#replacement-url").value.trim(),thumbnail:$("#replacement-thumbnail").value.trim()};
+   if(!mediaURL(row.url)||(row.thumbnail&&!mediaURL(row.thumbnail)))return dialogError("Use complete image URLs or upload a replacement picture.");
+   await photoDialogAction(async()=>{
+    await prepareS3PhotoRows([row]);
+    const full=row.url,thumbnail=row.thumbnail||full;
+    const caption=$("#replacement-caption").value,alt=$("#replacement-alt").value||caption;
+    image.setAttribute("src",pending.has(thumbnail)?"/__uploads/"+pending.get(thumbnail):thumbnail);
+    if(pending.has(thumbnail))image.dataset.sourceUrl=thumbnail;else image.removeAttribute("data-source-url");
+    image.setAttribute("alt",alt);
+    if(anchor){anchor.setAttribute("href",full);anchor.setAttribute("data-title",caption);}
+    else if(figureCaption)figureCaption.textContent=caption;
+    else if(caption)image.setAttribute("title",caption);else image.removeAttribute("title");
+    if($("#replacement-use-tile").checked){form.elements.tile_image.value=thumbnail;form.elements.tile_alt.value=alt;form.elements.image.value=full;}
+    mediaChanged();mediaDialog();
+   });
   };
  });
 }

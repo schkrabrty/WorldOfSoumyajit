@@ -39,7 +39,9 @@ jobs:
         env:
           JEKYLL_ENV: production
       - name: Test website manager operations
-        run: python3 -m unittest discover -s scripts -p 'test_*.py'
+        run: |
+          python3 -m pip install -r scripts/requirements-images.txt
+          python3 -m unittest discover -s scripts -p 'test_*.py'
       - name: Validate generated pages and sitemap
         run: python3 scripts/validate_site.py _site
       - name: Upload artifact

@@ -27,15 +27,9 @@ import webbrowser
 if str(Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 from s3_library import S3Library
+from site_sections import MAIN_PAGES, RESERVED_IDS, SECTIONS_FILE, TILES_FILE, load_sections, section_groups, sections_revision, validate_sections
 
 
-GROUPS = {
-    "research-projects": "Research & Projects",
-    "teaching-tutorials": "Teaching & Tutorials",
-    "academic-service": "Academic Service",
-    "photography": "Photography",
-    "creativity": "Creative work",
-}
 PROTECTED = {"index.html", "blog.html", "my-creativity.html", "about.html", "404.html", "elements.html"}
 FRONT = re.compile(r"\A---\r?\n(.*?)\r?\n---(?:\r?\n|\Z)", re.S)
 
@@ -161,22 +155,27 @@ class SiteManager:
         return json.loads(result.stdout) if action == "load" else result.stdout
 
     def snapshot(self):
-        files = {str(p.relative_to(self.root)): p.read_bytes() for p in self.root.glob("*.html") if FRONT.match(p.read_text())}
-        for name in ["_data/tiles.json", "_data/people.json", "_data/redirects.json", "_data/navigation.yml", "_config.yml"]:
-            files[name] = (self.root / name).read_bytes()
-        pages = {}
-        entries = [(name, data.decode()) for name, data in files.items() if name.endswith(".html")]
-        documents = [FRONT.match(text)[1] for _, text in entries]
-        metadata = self.yaml("load", documents=documents + [files["_config.yml"].decode()])
-        for (name, text), meta in zip(entries, metadata):
-            match = FRONT.match(text)
-            pages[name] = {"id": name, "url": meta.get("permalink", "/" if name == "index.html" else "/" + name),
-                           "meta": meta, "body": text[match.end():], "text": text, "revision": digest(files[name])}
-        return files, pages, metadata[-1]
+        with self.lock:
+            files = {str(p.relative_to(self.root)): p.read_bytes() for p in self.root.glob("*.html") if FRONT.match(p.read_text())}
+            for name in [TILES_FILE, SECTIONS_FILE, "_data/people.json", "_data/redirects.json", "_data/navigation.yml", "_config.yml"]:
+                files[name] = (self.root / name).read_bytes()
+            pages = {}
+            entries = [(name, data.decode()) for name, data in files.items() if name.endswith(".html")]
+            documents = [FRONT.match(text)[1] for _, text in entries]
+            metadata = self.yaml("load", documents=documents + [files["_config.yml"].decode()])
+            for (name, text), meta in zip(entries, metadata):
+                match = FRONT.match(text)
+                pages[name] = {"id": name, "url": meta.get("permalink", "/" if name == "index.html" else "/" + name),
+                               "meta": meta, "body": text[match.end():], "text": text, "revision": digest(files[name])}
+            return files, pages, metadata[-1]
 
     def state(self):
         files, pages, config = self.snapshot()
-        tiles = json.loads(files["_data/tiles.json"])
+        catalog, tiles = load_sections(files)
+        section_pages = [{"id": name, **details, **catalog[details["url"]],
+                          "sections": [{**section, "count": len(tiles[section["id"]])} for section in catalog[details["url"]]["sections"]]}
+                         for name, details in MAIN_PAGES.items()]
+        groups = {section["id"]: page["title"] + " / " + section["title"] for page in section_pages for section in page["sections"]}
         result = []
         for name, page in pages.items():
             if name in {"404.html", "elements.html"}:
@@ -185,7 +184,9 @@ class SiteManager:
             result.append({"id": name, "title": page["meta"].get("title", name), "url": page["url"],
                            "section": page["meta"].get("section", "main"), "protected": name in PROTECTED,
                            "groups": placements, "description": page["meta"].get("description", "")})
-        return {"pages": sorted(result, key=lambda p: (not p["protected"], p["title"].casefold())), "groups": GROUPS,
+        return {"pages": sorted(result, key=lambda p: (not p["protected"], p["title"].casefold())), "groups": groups,
+                "section_pages": section_pages, "sections_revision": sections_revision(files),
+                "group_categories": {section["id"]: page["category"] for page in section_pages for section in page["sections"]},
                 "people": json.loads(files["_data/people.json"]), "tiles": {group: [{"page": t["page"], **tile_fields(t)} for t in entries] for group, entries in tiles.items()},
                 "storage": self.storage.status(), "settings": {"profile_image": config.get("profile_image", ""), "email": config.get("email", ""),
                              "cv": config.get("cv", {}), "social": config.get("social", {})}, "history": self.history(), "build": self.build_status}
@@ -312,7 +313,7 @@ class SiteManager:
                 if filename.casefold() in occupied:
                     raise Problem("That address is already used by a page or a historical redirect.")
             section = data.get("section", "works")
-            if section not in {"works", "photography", "creativity", "main"}:
+            if section not in {"works", "photography", "creativity", "about", "main"}:
                 raise Problem("Choose a valid page section.")
             meta = copy.deepcopy(data.get("metadata") if isinstance(data.get("metadata"), dict) else existing["meta"] if existing else {})
             meta.update({"title": title, "description": description, "permalink": target_url})
@@ -362,7 +363,7 @@ class SiteManager:
                         if updated != other["text"]:
                             writes[other["id"]] = updated.encode()
                 writes["_data/redirects.json"] = self.json_bytes(redirects)
-            tiles = json.loads(before["_data/tiles.json"])
+            catalog, tiles = load_sections(before)
             prior = next((tile for entries in tiles.values() for tile in entries if tile["page"] == old_url), None)
             for group in tiles:
                 tiles[group] = [t for t in tiles[group] if t["page"] not in {old_url, target_url}]
@@ -372,7 +373,7 @@ class SiteManager:
             settings = data.get("tile") or {}
             if settings.get("enabled"):
                 group = settings.get("group")
-                if group not in GROUPS:
+                if group not in section_groups(catalog):
                     raise Problem("Choose the section where the tile should appear.")
                 position = max(0, min(int(settings.get("position", 0)), len(tiles[group])))
                 tiles[group].insert(position, make_tile(target_url, settings, prior, old_url))
@@ -443,16 +444,80 @@ class SiteManager:
         with self.lock:
             path = self.root / "_data/tiles.json"
             before = path.read_bytes()
-            tiles = json.loads(before)
+            catalog, tiles = load_sections({SECTIONS_FILE: (self.root / SECTIONS_FILE).read_bytes(), TILES_FILE: before})
             group = data.get("group")
             order = data.get("order", [])
             if group not in tiles or sorted(order) != sorted(t["page"] for t in tiles[group]):
                 raise Problem("The tile list changed. Reload it before arranging the tiles.")
             lookup = {tile["page"]: tile for tile in tiles[group]}
             tiles[group] = [lookup[url] for url in order]
-            self.commit("Arrange " + GROUPS[group] + " tiles", {"_data/tiles.json": self.json_bytes(tiles)}, {"_data/tiles.json": before})
+            self.commit("Arrange " + section_groups(catalog)[group] + " tiles", {TILES_FILE: self.json_bytes(tiles)}, {TILES_FILE: before})
         self.start_build()
         return {"message": "Tile order saved."}
+
+    def manage_sections(self, data):
+        with self.lock:
+            before, pages, _ = self.snapshot()
+            catalog, tiles = load_sections(before)
+            if data.get("revision") != sections_revision(before):
+                raise Problem("Sections or tiles changed after you opened this screen. Reload Sections before saving.")
+            page = data.get("page")
+            if page not in MAIN_PAGES: raise Problem("Choose a main page for these sections.")
+            settings = catalog[MAIN_PAGES[page]["url"]]
+            action = data.get("action")
+            identifier = data.get("id")
+            section = next((item for item in settings["sections"] if item["id"] == identifier), None)
+            if action in {"edit", "delete"} and section is None: raise Problem("That section no longer exists on this page.")
+            if action in {"create", "edit"}:
+                title = str(data.get("title", "")).strip()
+                if not title or len(title) > 120: raise Problem("Enter a section title between 1 and 120 characters.")
+                show_heading = data.get("show_heading", True)
+                if not isinstance(show_heading, bool): raise Problem("Choose whether the section heading is shown.")
+                if action == "create":
+                    base = slugify(title)
+                    if not base[0].isalpha(): base = "section-" + base
+                    used = set(RESERVED_IDS)
+                    used.update(re.findall(r'''\bid\s*=\s*["']([^"']+)''', pages[page]["body"], re.I))
+                    for item in section_groups(catalog): used.update({item, item + "-heading"})
+                    identifier, suffix = base, 2
+                    while identifier in used or identifier + "-heading" in used:
+                        identifier = base + "-" + str(suffix);suffix += 1
+                    settings["sections"].insert(0, {"id": identifier, "title": title, "show_heading": show_heading})
+                    tiles[identifier] = []
+                    label = "Add section " + title
+                else:
+                    section.update({"title": title, "show_heading": show_heading})
+                    label = "Edit section " + title
+            elif action == "reorder":
+                order = data.get("order")
+                expected = [item["id"] for item in settings["sections"]]
+                if not isinstance(order, list) or any(not isinstance(item, str) for item in order) or sorted(order) != sorted(expected):
+                    raise Problem("The section order must contain every section exactly once.")
+                lookup = {item["id"]: item for item in settings["sections"]}
+                settings["sections"] = [lookup[item] for item in order]
+                label = "Arrange sections on " + MAIN_PAGES[page]["title"]
+            elif action == "navigation":
+                if not isinstance(data.get("navigation"), bool): raise Problem("Choose whether section links are shown.")
+                settings["navigation"] = data["navigation"]
+                label = "Update section links on " + MAIN_PAGES[page]["title"]
+            elif action == "delete":
+                if tiles[identifier]:
+                    disposition = data.get("tile_action")
+                    if disposition not in {"move", "hide"}: raise Problem("Choose where the section's tiles should go.")
+                    if disposition == "move":
+                        destination = data.get("destination")
+                        if destination not in tiles or destination == identifier: raise Problem("Choose another section for these tiles.")
+                        existing_pages = {tile["page"] for tile in tiles[destination]}
+                        tiles[destination] = [tile for tile in tiles[identifier] if tile["page"] not in existing_pages] + tiles[destination]
+                settings["sections"] = [item for item in settings["sections"] if item["id"] != identifier]
+                tiles.pop(identifier)
+                label = "Remove section " + section["title"]
+            else:
+                raise Problem("Choose a valid section operation.")
+            validate_sections(catalog, tiles)
+            operation = self.commit(label, {SECTIONS_FILE: self.json_bytes(catalog), TILES_FILE: self.json_bytes(tiles)}, before)
+        if operation: self.start_build()
+        return {"id": identifier, "message": "Sections saved. Linked pages are preserved; preview is updating." if operation else "No section changes were needed."}
 
     def settings(self, data):
         with self.lock:
@@ -742,11 +807,14 @@ class Handler(BaseHTTPRequestHandler):
                 raise Problem("Choose a file smaller than 25 MB.")
             data = json.loads(self.rfile.read(size))
             operations = {"save": self.manager.save, "delete": self.manager.delete, "undo": self.manager.undo,
-                          "reorder": self.manager.reorder, "settings": self.manager.settings, "person": self.manager.person,
+                          "reorder": self.manager.reorder, "sections": self.manager.manage_sections, "settings": self.manager.settings, "person": self.manager.person,
                           "upload": self.manager.upload, "video": self.manager.video, "review": lambda _: self.manager.review_changes(),
                           "publish": self.manager.publish, "build": lambda _: self.manager.start_build(),
                           "s3/configure": self.manager.storage.configure, "s3/connect": lambda _: self.manager.storage.connect(),
                           "s3/install": lambda _: self.manager.storage.install(),
+                          "s3/install-images": lambda _: self.manager.storage.install_images(),
+                          "s3/prepare-images": self.manager.storage.prepare_images,
+                          "s3/prepare-image-urls": self.manager.storage.prepare_image_urls,
                           "s3/resolve": self.manager.storage.resolve}
             name = urlsplit(self.path).path.removeprefix("/api/")
             if name not in operations: return self.send(404, '{"error":"Unknown operation."}')

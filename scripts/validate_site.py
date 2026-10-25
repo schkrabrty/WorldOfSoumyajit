@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 from urllib.parse import parse_qsl, unquote, urlencode, urljoin, urlsplit
 import xml.etree.ElementTree as ET
+from site_sections import MAIN_PAGES, validate_sections
 
 
 PEOPLE = json.loads((Path(__file__).resolve().parents[1] / "_data/people.json").read_text())
@@ -46,6 +47,9 @@ class Page(HTMLParser):
         self.schemas = []
         self.people = []
         self.has_lightbox = False
+        self.sections = []
+        self.section_links = []
+        self._section_navigation = False
         self._header = False
         self._body = False
         self._title = False
@@ -59,6 +63,10 @@ class Page(HTMLParser):
         attrs = dict(attrs)
         if tag == "body":
             self._body = True
+        if tag == "section" and "portfolio-section" in attrs.get("class", "").split():
+            self.sections.append(attrs.get("id"))
+        if tag == "nav" and "portfolio-nav" in attrs.get("class", "").split():
+            self._section_navigation = True
         if "id" in attrs:
             self.ids[attrs["id"]] += 1
         if "data-lightbox" in attrs:
@@ -78,6 +86,7 @@ class Page(HTMLParser):
         if tag == "a":
             self._anchor = attrs.get("href")
             self.links.append(attrs.get("href", ""))
+            if self._section_navigation: self.section_links.append(attrs.get("href", ""))
         if tag == "link":
             rel = attrs.get("rel", "").split()
             if "icon" in rel:
@@ -94,6 +103,7 @@ class Page(HTMLParser):
                 self.assets.append(attrs["src"])
 
     def handle_endtag(self, tag):
+        if tag == "nav": self._section_navigation = False
         if tag == "body":
             self._body = False
         if tag == "header":
@@ -119,8 +129,9 @@ class Page(HTMLParser):
                 self.people.append((ALIASES[name], name, self._anchor))
 
 
-def validate(destination):
+def validate(destination, source_root=None):
     root = destination.resolve()
+    source_root = (source_root or Path(__file__).resolve().parents[1]).resolve()
     errors = []
 
     def check(condition, message):
@@ -208,7 +219,25 @@ def validate(destination):
             for key in ["description", "og:title", "og:description", "og:image"]:
                 check(bool(page.meta.get(key)), f"{name}: missing {key}")
     check(public == set(urls), f"Sitemap differs from public pages: missing {sorted(public - set(urls))}; extra {sorted(set(urls) - public)}")
-    catalog = json.loads((Path(__file__).resolve().parents[1] / "_data/tiles.json").read_text())
+    catalog = json.loads((source_root / "_data/tiles.json").read_text())
+    section_catalog = json.loads((source_root / "_data/sections.json").read_text())
+    try:
+        validate_sections(section_catalog, catalog)
+    except ValueError as error:
+        check(False, str(error))
+    for details in MAIN_PAGES.values():
+        settings = section_catalog.get(details["url"], {})
+        target = local_file(urljoin(sitemap_url, details["url"].lstrip("/") or "./"))
+        page = parsed.get(target)
+        check(page is not None, "Missing main page: " + details["url"])
+        if page is None: continue
+        expected = [section["id"] for section in settings.get("sections", [])]
+        check(page.sections == expected, f"{details['url']}: rendered sections differ from their configured order")
+        links = ["#" + identifier for identifier in expected] if settings.get("navigation") else []
+        check(page.section_links == links, f"{details['url']}: section navigation differs from its settings")
+        for section in settings.get("sections", []):
+            check(page.ids[section["id"]] == 1, f"{details['url']}: section anchor must occur once: {section['id']}")
+            check(page.ids[section["id"] + "-heading"] == int(section["show_heading"]), f"{details['url']}: incorrect section heading visibility: {section['id']}")
     for group, tiles in catalog.items():
         destinations = [tile["page"] for tile in tiles]
         check(len(destinations) == len(set(destinations)), f"Duplicate tile in {group}")
@@ -217,7 +246,7 @@ def validate(destination):
             check(target in public, f"{group}: tile points to a missing or non-public page: {tile['page']}")
             rendered = Page(tile["html"])
             check(any(urljoin(sitemap_url, link) == target for link in rendered.links), f"{group}: tile HTML and destination differ: {tile['page']}")
-    redirects = json.loads((Path(__file__).resolve().parents[1] / "_data/redirects.json").read_text())
+    redirects = json.loads((source_root / "_data/redirects.json").read_text())
     for old_url, target_url in redirects.items():
         source = local_file(urljoin(sitemap_url, old_url.lstrip("/")))
         target = urljoin(sitemap_url, target_url.lstrip("/"))
@@ -252,15 +281,17 @@ def validate(destination):
                 check(fragment in parsed[target].ids, f"{path.relative_to(root)}: missing anchor {reference}")
     for internal in ["_includes", "_layouts", "_data", "_plugins", "_config.yml", "Gemfile", "Gemfile.lock", "scripts", "Preview Website.command", "Manage Website.command", ".site-manager"]:
         check(not (root / internal).exists(), f"Internal build file published: {internal}")
-    for source in Path(".").glob("google*.html"):
+    for source in source_root.glob("google*.html"):
         if source.read_text().startswith("google-site-verification:"):
             check((root / source.name).read_bytes() == source.read_bytes(), "Google verification file changed")
     if errors:
         raise SystemExit("\n".join(errors))
-    print(f"Validated {len(public)} public pages, {profile_mentions} person links, {len(redirects)} legacy redirects, {video_dates} video datetimes, sitemap coverage, metadata, shared components, and local links.")
+    print(f"Validated {len(public)} public pages, {profile_mentions} person links, {len(redirects)} legacy redirects, {video_dates} video datetimes, main-page sections, sitemap coverage, metadata, shared components, and local links.")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("destination", nargs="?", type=Path, default=Path("_site"))
-    validate(parser.parse_args().destination)
+    parser.add_argument("--source", type=Path, help="Source website folder, if validating a temporary copy")
+    args = parser.parse_args()
+    validate(args.destination, args.source)

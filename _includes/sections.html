@@ -1,0 +1,26 @@
+{% assign section_settings = site.data.sections[page.url] %}
+{% if section_settings %}
+{% if section_settings.navigation and section_settings.sections != empty %}
+<nav class="portfolio-nav" aria-label="Page sections">
+  <ul>
+    {% for item in section_settings.sections %}
+    <li><a href="#{{ item.id | escape }}">{{ item.title | escape }}</a></li>
+    {% endfor %}
+  </ul>
+</nav>
+{% endif %}
+{% for item in section_settings.sections %}
+{% if item.show_heading %}
+<section id="{{ item.id | escape }}" class="portfolio-section" aria-labelledby="{{ item.id | escape }}-heading">
+  <h2 id="{{ item.id | escape }}-heading">{{ item.title | escape }}</h2>
+  <div class="tiles portfolio-tiles">
+    {% include tiles.html group=item.id %}
+  </div>
+</section>
+{% else %}
+<section id="{{ item.id | escape }}" class="portfolio-section tiles portfolio-tiles" aria-label="{{ item.title | escape }}">
+  {% include tiles.html group=item.id %}
+</section>
+{% endif %}
+{% endfor %}
+{% endif %}

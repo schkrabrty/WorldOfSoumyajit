@@ -1,0 +1,19 @@
+{
+  "/": {
+    "navigation": true,
+    "sections": [
+      {"id": "research-projects", "title": "Research & Projects", "show_heading": true},
+      {"id": "teaching-tutorials", "title": "Teaching & Tutorials", "show_heading": true},
+      {"id": "academic-service", "title": "Academic Service", "show_heading": true}
+    ]
+  },
+  "/blog.html": {
+    "navigation": false,
+    "sections": [{"id": "photography", "title": "Photography", "show_heading": false}]
+  },
+  "/my-creativity.html": {
+    "navigation": false,
+    "sections": [{"id": "creativity", "title": "Creative work", "show_heading": false}]
+  },
+  "/about.html": {"navigation": false, "sections": []}
+}

@@ -48,9 +48,10 @@ Manage website in VS Code. The manager opens at:
 
     http://127.0.0.1:4111/__manager/
 
-Keep its terminal open while working. Press Control-C to stop. It uses Python 3
-and the same Ruby 3.4 setup as the preview launcher; no Python packages or CMS
-account are required. To launch it from a terminal:
+Keep its terminal open while working. Press Control-C to stop. It uses Python 3.10+
+and the same Ruby 3.4 setup as the preview launcher. Photo thumbnails use Pillow,
+which is installed automatically in an isolated, ignored project folder on first
+use; no CMS account is required. To launch it from a terminal:
 
     bash "Manage Website.command"
 
@@ -59,9 +60,15 @@ account are required. To launch it from a terminal:
   creative work, and general pages are supported. Choose an existing page to
   edit it. The visual editor supports links, linked people, photo galleries,
   YouTube embeds, and PDFs; an HTML editor is also available.
-- Pictures & videos: every page editor has a panel at the top showing its media
-  count and Add pictures, Add a video, and Replace or remove buttons. These
-  actions edit that page's content directly. Click a picture in the visual
+- Headings: Heading on the page sets the main heading (H1). In the writing
+  toolbar, choose Paragraph, Section heading (H2), Subsection heading (H3), or
+  Subsubsection heading (H4) to format the selected text or current paragraph.
+  The menu follows the heading level at the cursor. Use heading levels in order.
+- Tooltips: hover over a field or button, or focus it with the keyboard, to see
+  a short explanation. Press Escape to dismiss a tooltip. Help also works in
+  dialogs, including the page, section, media, and S3 controls.
+- Pictures & videos: use Add photos, Add video, and Manage media in the writing
+  toolbar to edit that page's content. Click a picture in the visual
   editor to edit or remove it; the video edit dialog also has Remove video.
   Save & build preview applies your changes, and Review & publish sends them
   to the live website. Index tile pictures use the linked page's tile settings.
@@ -69,11 +76,17 @@ account are required. To launch it from a terminal:
   line. Each photo has a full-size URL (opened on click), an optional small-image
   URL (displayed in the gallery), and a caption. You can paste these as:
   full-size URL | small-image URL | caption. A single URL, or URL | caption,
-  also works. With no small-image URL, the same file is used for both views.
+  also works. For pictures in the configured S3 website folder, a missing
+  small-image URL is prepared automatically before insertion. Other image URLs
+  use the same file for both views when no small-image URL is supplied.
   Existing small/full-size pairs are preserved. Uploaded media is added to
   assets/uploads when its page is saved. Existing S3 URLs continue to work.
   Choose photos from S3 browses the corresponding website folder. Existing
   small/full-size pairs are filled in together when both objects are known.
+  If only the original exists, the manager downloads it, creates a thumbnail,
+  uploads that thumbnail to S3, and fills in both URLs. Replacement pictures and
+  new or changed page tile images use the same preparation. Existing page tiles
+  are left alone when saving unrelated text edits.
 - Manage media: inside the page editor, choose Manage media to see its existing
   pictures and videos. Replace / edit lets you upload a replacement photo or
   change its URL, caption, and image description. You may also apply that photo
@@ -87,6 +100,18 @@ account are required. To launch it from a terminal:
   upload datetime with its timezone before inserting the video.
 - Arrange tiles: choose a section, move tiles earlier or later, and save.
   Existing custom image crops, overlays, and awards are retained.
+- Sections: choose My Works, My Photography, My Creativity, or About Me, then
+  add a section, edit its title, show or hide its heading, or move it with the
+  arrows. Each move saves immediately and updates the preview. New sections
+  appear first. Enable Show section links above the tiles to add jump links.
+  The Page tile placement menu includes every current section and its main page.
+  New page tiles default to position 1 within the section you choose.
+  Removing a populated section asks whether to move its tiles into another
+  section or remove those tiles from main pages. Linked pages and their files
+  are kept. Moved tiles appear first in the destination, retaining their order
+  and custom artwork. Undo section changes from Recent changes.
+  These operations manage tile groups; headings inside page writing are set
+  with the writing toolbar. Save locally, review the preview, then publish as usual.
 - People & profile links: add or update collaborators' names, profile URLs, and
   aliases. Use Add person in the page editor to insert a shared linked name.
 - Shared settings: change the default photo/favicon, email, CV URLs, and social
@@ -126,6 +151,13 @@ from builds; the site's actual styles, scripts, and webfonts remain included.
 Undoing an already-published edit creates a local change; publish it again to
 update the live website.
 
+Main-page section titles, order, heading visibility, and jump-link settings live
+in _data/sections.json. Tile content stays in _data/tiles.json. The shared layout
+renders the configured sections below each main page's editable content. Section
+IDs remain stable when renamed, and operations save both data files together
+with conflict checks and undo backups. The production validator checks that
+rendered sections, headings, and jump links match the configured order.
+
 S3 connection and one-time cleanup
 ----------------------------------
 
@@ -142,8 +174,58 @@ If AWS CLI 2 is unavailable, choose Install AWS support or run:
 
 The official AWS installer puts its verified CLI into .site-manager, without a
 system-wide installation. AWS manages sign-in credentials in its standard local
-cache outside the repository. The normal S3 picker only lists and selects files;
+cache outside the repository. Browsing S3 files only lists and selects files.
+Choosing pictures for page content or tiles also creates any missing thumbnails;
 removing media or deleting a page never deletes an S3 object automatically.
+
+Automatic S3 photo thumbnails
+-----------------------------
+
+1. Upload original pictures to the website folder in S3, as usual.
+2. In a page editor, choose Add pictures > Choose photos from S3 and select them.
+   You can also paste original S3 URLs and choose Insert gallery.
+3. The manager reuses existing small/full pairs or creates missing thumbnails.
+   Gallery pictures and page tiles use the smaller URL, while clicking a gallery
+   picture opens its original in the image viewer.
+4. Save & build preview, review the page, and publish the page changes as usual.
+
+New thumbnails are WebP images with a maximum width and height of 800 pixels.
+They keep the original proportions, correct camera orientation, preserve
+transparency, and do not upscale small pictures. EXIF/GPS information is removed
+from thumbnails. Original files and their metadata remain untouched. Animated
+images get a static first-frame preview; SVG files are reused without resizing.
+Sources up to 50 MB and 50 million pixels are supported.
+
+Generated images are stored in an _thumbnails subfolder beside the original
+pictures. Their filenames include a version derived from the original S3 ETag,
+so selecting a replaced original creates a fresh thumbnail URL. Uploads use
+If-None-Match to prevent overwriting another file. Existing hand-made thumbnail
+pairs and crops take precedence. Generated subfolders are hidden in the picker;
+select the originals from their parent folder.
+
+Thumbnail uploads happen immediately when pictures are prepared, before the page
+is saved or published. Retrying after an interrupted operation reuses completed
+uploads. Cancelling a page does not remove already-created thumbnails. The
+manager must be running for this workflow; it does not install an AWS Lambda
+function or process uploads while the manager is closed.
+
+Your AWS profile needs s3:ListBucket for the website folder, s3:GetObject for
+originals and thumbnails, and s3:PutObject for _thumbnails objects. The new images
+must be publicly readable under your existing website access policy. For older
+buckets where individual originals use public-read ACLs, the manager mirrors only
+that grant to its own thumbnail; this additionally needs s3:GetObjectAcl on the
+originals and s3:PutObjectAcl on thumbnails. It never changes bucket policies or
+original-image permissions. If access is missing, the picker reports the error
+and keeps the selection available to retry after reconnecting or fixing access.
+
+To set up photo support manually, or repair an interrupted installation:
+
+    bash scripts/setup_images.sh
+
+The dependency environment lives in .site-manager/images-venv and stays out of
+Git and the published website. To run all image and manager tests locally:
+
+    .site-manager/images-venv/bin/python3 -m unittest discover -s scripts -p 'test_*.py'
 
 The separate one-time cleanup tools are for an explicit audit and deletion:
 
